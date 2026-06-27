@@ -56,16 +56,17 @@ fallback / "act 1" of the demo.
 
 ## 3. Implementation checklist
 
-### Phase 0 — Foundations
-- [ ] Clone the Intel repo (`metro-ai-suite/smart-route-planning-agent`) into this workspace.
-- [ ] `git init` the working repo; commit the planning docs + spike.
-- [ ] Provision Atsigns: decide vanity vs registered. Need 8 service Atsigns
-  (`@smartroute_planner`, 3 intersections, 3 feeds, `@route_operator`) + ≥1 commuter.
-- [ ] Stand up the test env (ephemeral environment, fresh image) and onboard all Atsigns
-  (extend `spike/onboard_ee.py` to loop over the full set).
-- [ ] Stand up the **Policy plane** (`@route_policy`) — a policy service the planner
-  queries to authorize publishers/clients by identity + role (default-deny). Modeled on
-  the NoPorts policy manager. Decide allow-list-file vs policy-engine backing.
+### Phase 0 — Foundations ✅ DONE
+- [x] Clone the Intel repo (`metro-ai-suite/smart-route-planning-agent`) into this workspace
+  → `smart-route-planning-agent/` (sparse clone, release-2026.0.0, 51 files).
+- [x] `git init` the working repo; commit the planning docs + spike (commit `68813b1`).
+- [x] Provision Atsigns → role map in `config/ee_atsigns.json` (EE NATO atSign + production
+  vanity per role). 11 roles incl. policy + policy-admin + commuter.
+- [x] Stand up the test env (ephemeral env, fresh image) and onboard all Atsigns →
+  `scripts/onboard_all_ee.py` (loops the role map, pulls CRAM, skips already-onboarded).
+  **11/11 onboarded** to `HOME=/tmp/eehome`.
+- [x] Trust model **decided: a policy engine** (atKeys store + DB-pluggable). Policy atSign
+  (`@juliet` / vanity `@route_policy`) provisioned. Build is Phase 2b.
 
 ### Phase 1 — Wire contract + cross-language interop
 - [ ] Promote `spike/payload.py` into a shared contract module; align field names 1:1

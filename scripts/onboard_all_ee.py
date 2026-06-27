@@ -34,8 +34,14 @@ def main():
     cfg = json.load(open(os.path.join(ROOT, "config", "ee_atsigns.json")))
     root = cfg["rootDomain"]
     ok, failed = [], []
+    keys_dir = os.path.expanduser("~/.atsign/keys")
     for role, m in cfg["roles"].items():
         at = m["ee"]
+        keyfile = os.path.join(keys_dir, f"{at}_key.atKeys")
+        if os.path.exists(keyfile):
+            print(f"\n=== {role}: {at} already onboarded (keys present) — skip ===")
+            ok.append(f"{role}={at} (existing)")
+            continue
         print(f"\n=== {role}: onboarding {at} ===")
         try:
             cram = cram_for(at)
