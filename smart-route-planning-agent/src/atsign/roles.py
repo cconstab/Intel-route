@@ -46,4 +46,7 @@ def namespace() -> str:
 
 
 def root() -> str:
-    return _load()["rootDomain"]
+    """Root server for the active profile: ee -> local EE, vanity -> production."""
+    cfg = _load()
+    by_profile = cfg.get("rootDomains", {})
+    return by_profile.get(_profile()) or cfg.get("rootDomain") or "root.atsign.org:64"

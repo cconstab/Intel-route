@@ -2,6 +2,10 @@
   "_comment": "Role -> Atsign map. 'ee' = NATO atSign in the local ephemeral environment (demo/test). 'vanity' = the suggested registered atSign for production. namespace + rootDomain apply to all.",
   "namespace": "smartroute",
   "rootDomain": "vip.ve.atsign.zone:64",
+  "rootDomains": {
+    "ee": "vip.ve.atsign.zone:64",
+    "vanity": "root.atsign.org:64"
+  },
   "roles": {
     "planner":             { "ee": "@alpha",   "vanity": "@smartroute_planner" },
     "intxn_market_st":     { "ee": "@bravo",   "vanity": "@intxn_market_st" },

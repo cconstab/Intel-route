@@ -19,6 +19,7 @@ Run (as the policy atSign):
 import argparse
 import json
 import sys
+import threading
 import time
 
 from at_client import AtClient
@@ -26,11 +27,11 @@ from at_client.common import AtSign
 from at_client.common.keys import SelfKey
 from at_client.connections import Address
 
-from atsign import roles
-from atsign.atsign_io import AtPublisher
+from atsign import roles, wire
+from atsign.atsign_io import AtPublisher, AtSubscriber
 
 PUBLISHER_ROLES = [
-    "intxn_market_st", "intxn_5th_ave", "intxn_broadway",
+    "intxn_market_st", "intxn_5th_ave", "intxn_broadway", "intxn_downtown",
     "weather_feed", "traffic_trends_feed", "events_feed",
 ]
 
@@ -63,41 +64,71 @@ class AtKeyPolicyStore:
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--grant", default=",".join(PUBLISHER_ROLES),
-                    help="comma-separated roles to authorize (default: all publishers)")
-    ap.add_argument("--interval", type=float, default=8.0)
-    ap.add_argument("--repeat", type=int, default=3, help="times to (re)publish the policy")
+                    help="comma-separated roles to authorize initially (default: all publishers)")
+    ap.add_argument("--interval", type=float, default=30.0, help="policy re-publish heartbeat (s)")
+    ap.add_argument("--repeat", type=int, default=0, help="(accepted for compatibility; ignored — runs as a service)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
 
     me_str = roles.atsign_for("policy")
     me = AtSign(me_str)
-    granted_roles = [r.strip() for r in args.grant.split(",") if r.strip()]
-    granted = {roles.atsign_for(r) for r in granted_roles}
-    denied = {roles.atsign_for(r) for r in PUBLISHER_ROLES} - granted
+    planner = roles.atsign_for("planner")
+    admin_atsign = roles.atsign_for("policy_admin")
+    all_publishers = {roles.atsign_for(r) for r in PUBLISHER_ROLES}
+    granted = {roles.atsign_for(r) for r in args.grant.split(",") if r.strip()}
 
-    print(f"[policy] engine {me_str}; granting {sorted(granted)}")
-    if denied:
-        print(f"[policy] NOT granting (default-deny): {sorted(denied)}")
-
-    # 1) Persist rules in the engine's own atSign store.
     engine = AtClient(me, root_address=Address.from_string(roles.root()), verbose=args.verbose)
     store = AtKeyPolicyStore(engine, me)
-    for s in granted:
-        store.grant(s)
-    for s in denied:
-        store.revoke(s)
-    print(f"[policy] rules persisted as atKeys in {me_str}'s store")
-
-    # 2) Publish the authorization set to the planner (re-publish so late joiners get it).
-    planner = roles.atsign_for("planner")
     pub = AtPublisher(me_str)
-    grants_doc = json.dumps({"grants": sorted(granted), "issued_by": me_str})
-    for i in range(args.repeat):
-        pub.notify(planner, "policy", grants_doc)
-        print(f"[policy] published policy -> {planner} ({i + 1}/{args.repeat})")
-        if i < args.repeat - 1:
-            time.sleep(args.interval)
-    print("[policy] done.")
+
+    def persist():
+        for s in all_publishers:
+            (store.grant if s in granted else store.revoke)(s)
+
+    def publish():
+        pub.notify(planner, "policy",
+                   json.dumps({"grants": sorted(granted), "issued_by": me_str}))
+
+    last_ver = [0]  # ignore stale/replayed admin notifications (monotonic version guard)
+
+    def on_admin(frm, key, value, raw):
+        # Only accept rule changes from the authorised Policy Admin atSign (@route_policy_admin).
+        if wire.key_name_from_atkey(key) != "admin" or frm != admin_atsign:
+            if wire.key_name_from_atkey(key) == "admin":
+                print(f"[policy] IGNORED admin change from non-admin {frm}")
+            return
+        try:
+            data = json.loads(value)
+            ver = int(data.get("version", 0))
+            new_grants = {str(g) for g in data.get("grants", [])}
+        except Exception as e:
+            print(f"[policy] bad admin payload: {e}")
+            return
+        if ver <= last_ver[0]:
+            return  # stale or replayed — already have a newer rule set
+        last_ver[0] = ver
+        granted.clear()
+        granted.update(new_grants & all_publishers)  # only known publishers
+        persist()
+        publish()
+        print(f"[policy] admin {frm} updated grants -> {sorted(granted)}")
+
+    print(f"[policy] engine {me_str}; initial grants {sorted(granted)}")
+    persist()
+    publish()
+    print(f"[policy] rules persisted as atKeys; published to {planner}")
+
+    # Listen for admin rule changes from @route_policy_admin (segregation of duties).
+    time.sleep(2)  # let the engine/publisher connections settle before a 3rd client
+    threading.Thread(
+        target=lambda: AtSubscriber(me_str, roles.namespace(), on_admin).start(),
+        daemon=True,
+    ).start()
+    print(f"[policy] listening for admin changes from {admin_atsign}; heartbeat every {args.interval}s")
+
+    while True:
+        time.sleep(args.interval)
+        publish()
 
 
 if __name__ == "__main__":

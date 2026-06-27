@@ -102,7 +102,10 @@ fallback / "act 1" of the demo.
 - [x] **Acceptance MET:** with Broadway intentionally not granted, the planner **caches the
   granted publishers and DENIES `@delta` (Broadway)**; re-publishing a new grant set updates
   the planner live (no restart). Verified on the EE.
-- [ ] *(later)* `@route_policy_admin`-signed rule changes (demo seeds rules in the engine directly).
+- [x] **`@route_policy_admin`-signed rule changes** — `dart_client/bin/policy_admin.dart` runs as
+  `@kilo`, serves a web policy console (`:8090`), and pushes **versioned** grant changes that the
+  engine verifies (sender must be the admin atSign) and applies live. Segregation of duties realized
+  (admin `@kilo` ≠ engine `@juliet` ≠ planner `@alpha`).
 
 ### Phase 3 — Planner subscriber + `live_traffic.py` SWAP ✅ DONE
 - [x] `scripts/planner_subscriber.py` runs as the planner: `start_monitor("smartroute")`,
