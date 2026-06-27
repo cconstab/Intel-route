@@ -9,15 +9,13 @@ venv/
 .atsign/
 
 # Dart / Flutter
-spike/interop_dart/.dart_tool/
-spike/interop_dart/build/
-spike/interop_dart/pubspec.lock
+**/.dart_tool/
+**/build/
+dart_client/pubspec.lock
 .flutter-plugins*
 
-# Spike / run logs
+# run logs
 *.log
-spike/sub.log
-spike/py_sub.log
 
 # Upstream clone temp
 .upstream_tmp/

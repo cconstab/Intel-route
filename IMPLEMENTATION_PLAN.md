@@ -4,7 +4,7 @@
 (14 nodes / 16 edges, validated). Companion docs: [PRD.md](PRD.md) ·
 [atsign-migration-assessment.md](atsign-migration-assessment.md) ·
 [path-comparison-and-recommendation.md](path-comparison-and-recommendation.md) ·
-spike: [spike/README.md](spike/README.md).
+validation/spike: [validation/README.md](validation/README.md).
 
 Scope: build **Path B** (native pub/sub). Path A (NoPorts drop-in) remains the
 fallback / "act 1" of the demo.
@@ -44,7 +44,7 @@ fallback / "act 1" of the demo.
 - **Communication pattern:** event-driven notifications
   (`notify` / `subscribe` ≈ Python `notify` / `start_monitor`).
 
-### Spike learnings already baked in (see `spike/publisher.py`)
+### Spike learnings already baked in (see `validation/publisher.py`)
 1. `notify()` needs `sk.metadata.iv_nonce = EncryptionUtil.generate_iv_nonce()` per send.
 2. `notify()`'s default `session_id` is evaluated once at import → pass a **fresh**
    `session_id=str(uuid.uuid4())` per send or the server dedups.
@@ -75,7 +75,7 @@ fallback / "act 1" of the demo.
   namespace `smartroute`); `key_name_from_atkey` handles both Dart & atsdk key renderings.
 - [x] **Interop spike (critical) — DONE ✅:** Python `atsdk` `notify` → Dart `at_client`
   `subscribe` decrypt, **and** Dart → Python, both verified against a live atServer with
-  the `LiveTrafficData` payload intact (see `spike/interop_dart/` + `spike/README.md`).
+  the `LiveTrafficData` payload intact (see `dart_client/` + `validation/README.md`).
   AES/RSA/IV are interoperable; the cross-language hop is **not** a blocker.
 
 ### Phase 2 — Publishers (intersections + conditions feeds) ✅ DONE

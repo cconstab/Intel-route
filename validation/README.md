@@ -18,7 +18,7 @@ unknown. Both directions verified against the live atServer:
 - **Dart `@bravo` → Python `@alpha`** (commuter → planner): `status=delivered`; Python
   decrypted + validated it (`density=17, incident=crowding`).
 The encrypted-JSON wire under shared keys is fully interoperable between the two SDKs.
-Code in [`interop_dart/`](interop_dart/).
+Dart code in [`../dart_client/`](../dart_client/).
 
 ---
 
@@ -29,9 +29,9 @@ Code in [`interop_dart/`](interop_dart/).
 | `payload.py` | Wire contract — `LiveTrafficData`-shaped dict + encode/decode/validate (mirrors `schema.py`) |
 | `publisher.py` | Intersection-style publisher: `AtClient.notify(SharedKey, json)` |
 | `subscriber.py` | Planner-style subscriber: `AtClient.start_monitor(regex)` + cache |
-| `onboard_ee.py` | CRAM → PKAM onboarding to mint `.atKeys` against a local root |
 | `selftest.py` | Offline checks (no keys/network): API surface, key naming, payload round-trip |
-| `interop_dart/` | Dart `at_client` publisher + subscriber for the Python⇄Dart interop test |
+| `../scripts/onboard_ee.py` | CRAM → PKAM onboarding to mint `.atKeys` (moved to scripts/ — used by `onboard_all_ee.py`) |
+| `../dart_client/` | Dart `at_client` programs: `change_route.dart` (demo tool) + `dart_publisher`/`dart_subscriber` (interop test) |
 
 ## Results
 
@@ -93,8 +93,8 @@ docker run -d --name atsign-ee --add-host vip.ve.atsign.zone:127.0.0.1 \
 # 2. onboard two atSigns with their CRAM secrets (from the container)
 ALPHA=$(docker exec atsign-ee cat /atsign/atservers/alpha/CRAM)
 BRAVO=$(docker exec atsign-ee cat /atsign/atservers/bravo/CRAM)
-python onboard_ee.py -a @alpha -c "$ALPHA" -r vip.ve.atsign.zone:64
-python onboard_ee.py -a @bravo -c "$BRAVO" -r vip.ve.atsign.zone:64
+python ../scripts/onboard_ee.py -a @alpha -c "$ALPHA" -r vip.ve.atsign.zone:64
+python ../scripts/onboard_ee.py -a @bravo -c "$BRAVO" -r vip.ve.atsign.zone:64
 
 # 3. round-trip
 python subscriber.py --atsign @bravo --regex smartroute --root vip.ve.atsign.zone:64 &

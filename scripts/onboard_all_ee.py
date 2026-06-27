@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "spike"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # scripts/ — for onboard_ee
 import onboard_ee  # noqa: E402
 
 CONTAINER = os.environ.get("EE_CONTAINER", "atsign-ee")

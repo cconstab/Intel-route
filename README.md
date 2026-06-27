@@ -58,7 +58,7 @@ Switch profiles with `ATSIGN_PROFILE=ee` (default) or `ATSIGN_PROFILE=vanity`.
 | `request` | commuter → planner | `{source, destination}` |
 
 The wire format **is** Intel's `schema.py` Pydantic models serialized to JSON — Python and
-Dart interoperate (verified in `spike/`).
+Dart interoperate (verified in `validation/`).
 
 ## Reuse map (KEEP / SWAP / ADD)
 
@@ -76,10 +76,11 @@ Dart interoperate (verified in `spike/`).
 ```
 smart-route-planning-agent/   Intel app (sparse clone) + src/atsign/ integration + SWAP'd controllers
 commuter_app/                 Flutter commuter app (at_client_flutter + flutter_map)
-scripts/                      onboarding + planner subscriber + receivers + run_demo.sh
+scripts/                      onboarding + planner service/subscriber + receivers + run_demo.sh
+dart_client/                  pure-Dart at_client programs: change_route (demo tool) + interop tests
 config/ee_atsigns.json        role -> atSign map
 blueprints/                   Path A (NoPorts) + Path B (native, 16/18) blueprints
-spike/                        validated SDK spike + Python<->Dart interop
+validation/                   SDK + Python<->Dart interop proof (the de-risking spike)
 ```
 
 ## Run it (local ephemeral environment)
@@ -107,7 +108,7 @@ bash scripts/start_stack.sh &                 # policy + planner service + 6 pub
 python -m atsign.operator_console &           # operator web console -> http://127.0.0.1:7865
 python scripts/trigger_incident.py            # inject congestion -> console flips to 🚨 REROUTE (clears in ~60s)
 # ...or change the route from PURE DART (proves Dart can drive the system too):
-(cd spike/interop_dart && HOME=/tmp/eehome dart run bin/change_route.dart \
+(cd dart_client && HOME=/tmp/eehome dart run bin/change_route.dart \
    --atsign @bravo --root-domain vip.ve.atsign.zone)            # reroute (add --density 0 to clear)
 bash scripts/stop_stack.sh                     # stop everything
 ```
