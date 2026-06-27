@@ -68,6 +68,9 @@ def main():
                 "optimal_route": {"route_name": shortest, "distance": dist},
                 "no_fly_list": list(IGNORED_ROUTES),
             }
+            # Reset Intel's cross-call buffer so each cycle reflects only the current cache
+            # (avoids stale-incident flapping when calling the node in a loop).
+            rp.live_traffic_status_list = []
             result = rp.update_optimal_route_realtime(state)
             chosen = result["optimal_route"].get("route_name") or shortest
             cdist = result["optimal_route"].get("distance", dist)

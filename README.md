@@ -106,6 +106,9 @@ python scripts/onboard_all_ee.py
 bash scripts/start_stack.sh &                 # policy + planner service + 6 publishers
 python -m atsign.operator_console &           # operator web console -> http://127.0.0.1:7865
 python scripts/trigger_incident.py            # inject congestion -> console flips to 🚨 REROUTE (clears in ~60s)
+# ...or change the route from PURE DART (proves Dart can drive the system too):
+(cd spike/interop_dart && HOME=/tmp/eehome dart run bin/change_route.dart \
+   --atsign @bravo --root-domain vip.ve.atsign.zone)            # reroute (add --density 0 to clear)
 bash scripts/stop_stack.sh                     # stop everything
 ```
 
