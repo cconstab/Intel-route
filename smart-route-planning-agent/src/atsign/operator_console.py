@@ -56,10 +56,11 @@ def _on_record(frm, key, value, raw):
         STATE.update_status(d)
         if d.get("points"):
             STATE.update_route(d)  # status carries the optimal-route geometry
-        logger.info("operator: status updated")
+        print(f"[operator] status received: route={d.get('optimal_route')} "
+              f"rerouted={d.get('rerouted')} pts={len(d.get('points', []))}", flush=True)
     elif kn == "route":
         STATE.update_route(json.loads(value))
-        logger.info("operator: route geometry updated")
+        print("[operator] route geometry received", flush=True)
 
 
 def start_subscriber():

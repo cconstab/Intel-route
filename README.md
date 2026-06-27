@@ -82,7 +82,7 @@ blueprints/                   Path A (NoPorts) + Path B (native, 16/18) blueprin
 spike/                        validated SDK spike + Python<->Dart interop
 ```
 
-## Run the demo (local ephemeral environment)
+## Run it (local ephemeral environment)
 
 ```bash
 # 1. Start the EE (fresh image: it ships a valid cert; the cached one may be expired)
@@ -90,25 +90,33 @@ docker run -d --name atsign-ee --add-host vip.ve.atsign.zone:127.0.0.1 \
   -e DNS_FQDN=vip.ve.atsign.zone -e FIRST_PORT=2500 \
   -p 64:64 -p 2500-2540:2500-2540 atsigncompany/ephemeral
 
-# 2. Python env (isolated keystore so test keys never touch ~/.atsign)
+# 2. One-time: project venv with all deps
 python3 -m venv .venv && . .venv/bin/activate
-pip install atsdk pydantic langgraph==1.0.9 gpxpy folium
-export HOME=/tmp/eehome PYTHONPATH=$PWD/smart-route-planning-agent/src
+pip install atsdk pydantic langgraph==1.0.9 gpxpy folium "gradio>=6.7.0"
 
-# 3. Onboard the 11 role atSigns
+# 3. Set up the terminal (venv + EE keystore + PYTHONPATH) — use a dedicated terminal
+source scripts/env.sh
+
+# 4. One-time: onboard the role atSigns
 python scripts/onboard_all_ee.py
-
-# 4. Run the live demo (policy -> pushed reroute -> commuter alert + operator status)
-bash scripts/run_demo.sh
-
-# 5. (finale) policy-gated dynamic onboarding — a new intersection joins live
-python scripts/onboarding_finale.py
 ```
 
-Individual pieces: `python -m atsign.policy_engine`, `python -m atsign.publishers.feed
---role weather_feed`, `python scripts/planner_subscriber.py`, `python -m
-atsign.operator_console` (Gradio on :7865). Flutter app: `cd commuter_app && flutter run`
-(point at the EE via a custom root domain).
+**A. Live system (recommended) — runs continuously:**
+```bash
+bash scripts/start_stack.sh &                 # policy + planner service + 6 publishers
+python -m atsign.operator_console &           # operator web console -> http://127.0.0.1:7865
+python scripts/trigger_incident.py            # inject congestion -> console flips to 🚨 REROUTE (clears in ~60s)
+bash scripts/stop_stack.sh                     # stop everything
+```
+
+**B. One-shot demos (run with the stack stopped — they manage their own policy):**
+```bash
+bash scripts/run_demo.sh             # policy -> pushed reroute -> commuter alert + operator status
+python scripts/planner_run.py        # single reroute + push
+python scripts/onboarding_finale.py  # a new intersection joins live (policy-gated)
+```
+
+Flutter app: `cd commuter_app && flutter run` (point at the EE via a custom root domain).
 
 ## Status
 
