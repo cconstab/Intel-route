@@ -12,6 +12,7 @@ from config import (
     ADVERSE_WEATHER_CONDITIONS,
     GPX_DIR,
     IGNORED_ROUTES,
+    STATIC_ROUTE_OPTIMIZER_STACK,
     CongestionLevel,
     PlannerNode,
     StaticOptimizerName,
@@ -109,7 +110,10 @@ class RoutePlanner:
         return {
             "direct_route": direct_route_state,
             "optimal_route": initial_optimal_route,  # Initially, optimal route is same as direct route
-            # "static_optimizers": STATIC_ROUTE_OPTIMIZER_STACK, Disabled static optimizers for now
+            # Atsign migration: RE-ENABLED. Intel shipped this commented out; the static
+            # optimizers now consume the live weather/traffic/events feeds via the cache.
+            # Use a fresh copy so the OPTIMAL node's .pop() doesn't mutate the global list.
+            "static_optimizers": list(STATIC_ROUTE_OPTIMIZER_STACK),
             "no_fly_list": [*IGNORED_ROUTES],
         }
 

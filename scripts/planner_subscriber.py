@@ -53,8 +53,13 @@ def on_record(frm: str, key: str, value: str, raw: dict):
         cache.put_live_traffic(frm, model)
         print(f"[planner] CACHED  live_traffic from {roles.role_for_atsign(frm)}: "
               f"{model.intersection_name} density={model.traffic_density} (cache={cache.size()})")
+    elif kn in ("weather", "traffic_trends", "planned_events"):
+        model = wire.decode(kn, value)
+        cache.put_condition(kn, frm, model)
+        print(f"[planner] CACHED  {kn} from {roles.role_for_atsign(frm)} "
+              f"(cache[{kn}]={cache.conditions_size(kn)})")
     else:
-        print(f"[planner] ACCEPT  {kn} from {roles.role_for_atsign(frm)} (conditions cache = Phase 4)")
+        print(f"[planner] ACCEPT  {kn} from {roles.role_for_atsign(frm)}")
 
 
 def _controller_view():

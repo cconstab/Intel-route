@@ -1,23 +1,22 @@
-# Copyright (C) 2026 Intel Corporation
+# Copyright (C) 2026 Intel Corporation / Atsign migration
 # SPDX-License-Identifier: Apache-2.0
-
-import csv
+#
+# SWAP (Atsign migration): reads the subscription-fed conditions cache instead of
+# data/csv/planned_events.csv. The @events_feed atSign now publishes
+# PlannedEventsData; this controller looks it up by coordinate. Class +
+# RouteStatusInterface unchanged. Original preserved as planned_events.py.intel-orig.
 from typing import Optional
 
-from config import ROUTE_STATUS_DIR, CongestionLevel
 from controllers.route_interface import RouteStatusInterface
-from schema import GeoCoordinates, PlannedEventsData
+from schema import PlannedEventsData
+from atsign import cache
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
 class PlannedEventsController(RouteStatusInterface):
-    """
-    Controller for handling planned events data
-    """
-
-    PLANNED_EVENTS_CSV: str = "planned_events.csv"
+    """Planned events, sourced from the @events_feed subscription cache."""
 
     def __init__(self, latitude: float, longitude: float):
         self._latitude = latitude
@@ -33,41 +32,8 @@ class PlannedEventsController(RouteStatusInterface):
 
     @property
     def proximity_factor(self) -> float:
-        """
-        A float integer to help consider nearby latitude and longitudes as matching location coordinates.
-        """
         # Match for very large areas around ~1x1 Sq.Kms.
         return 0.01
 
     def fetch_route_status(self) -> Optional[PlannedEventsData]:
-        """
-        Fetch the planned events information for the location from data/csv/planned_events.csv
-        based on latitude and longitude.
-        """
-        # Get the data from CSV and return using proper schema
-        with open(ROUTE_STATUS_DIR / self.PLANNED_EVENTS_CSV, "r") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                # Check if coordinates are close enough (within a small radius)
-                if (
-                    abs(float(row["latitude"]) - self.latitude) <= self.proximity_factor
-                    and abs(float(row["longitude"]) - self.longitude)
-                    <= self.proximity_factor
-                ):
-                    # Try to read traffic_impact from CSV as CongestionLevel enum
-                    try:
-                        congestion_level = CongestionLevel(row["traffic_impact"])
-                    except ValueError:
-                        # Graceful handling: Set a default low value instead of raising error
-                        congestion_level = CongestionLevel.LOW
-
-                    return PlannedEventsData(
-                        location_coordinates=GeoCoordinates(
-                            latitude=self.latitude, longitude=self.longitude
-                        ),
-                        congestion_level=congestion_level,
-                        event_name=row["event_name"],
-                    )
-
-        # No Data available for given coordinates
-        return None
+        return cache.find_condition("planned_events", self.latitude, self.longitude, self.proximity_factor)

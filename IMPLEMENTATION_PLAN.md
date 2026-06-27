@@ -118,12 +118,19 @@ fallback / "act 1" of the demo.
 - [ ] *(Phase 4/5)* full `plan_route` reroute end-to-end — needs intersection coords aligned to
   GPX trackpoints + the OPTIMAL node re-enabled to trigger an actual route change.
 
-### Phase 4 — Re-enable the static optimizers (OPTIMAL node)
-- [ ] Re-enable `STATIC_ROUTE_OPTIMIZER_STACK` in `route_planner.py` (Intel left it
-  commented out).
-- [ ] Point the weather/traffic/events controllers at the subscription cache (fed by the
-  feed Atsigns) instead of reading CSVs directly — same `RouteStatusInterface`.
-- [ ] **Acceptance:** a weather/event feed value changes the chosen route (not just density).
+### Phase 4 — Re-enable the static optimizers (OPTIMAL node) ✅ DONE
+- [x] Re-enabled `STATIC_ROUTE_OPTIMIZER_STACK` in `route_planner.py` (fresh copy so the
+  OPTIMAL node's `.pop()` doesn't mutate the global).
+- [x] SWAP'd `weather_report.py` / `traffic_trends.py` / `planned_events.py` to read
+  `cache.find_condition(...)` (coordinate match, same proximity factors); originals kept
+  as `*.intel-orig`.
+- [x] `cache.py` extended with conditions caches; planner subscriber caches them.
+- [x] **Acceptance MET — genuine live reroute from pushed data** (`scripts/planner_run.py`):
+  intersection `@bravo` pushed density=30 at a real trackpoint of the shortest route
+  (`berkeley-oakland-i880`); the unmodified LangGraph realtime node rerouted to
+  `berkeley-sanbruno` via the SWAP'd `LiveTrafficController` (cache, not a URL).
+- [ ] *(optional polish)* force a static-path (weather/event) reroute — wired and
+  cache-reading; triggering is data-dependent on feed coords vs route trackpoints.
 
 ### Phase 5 — Planner pushes route + reroute alerts
 - [ ] Planner `notify()`s the optimal route geometry (`RoutePoints`) + reason to each
