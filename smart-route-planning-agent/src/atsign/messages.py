@@ -31,6 +31,7 @@ class StatusPush(BaseModel):
     rerouted: bool
     agent_status: str
     intersections: List[dict] = []  # [{name, lat, lon, density}, ...]
+    points: List[List[float]] = []  # optimal-route geometry for the console map
 
 
 def route_points(route_name: str, max_points: int = 120) -> List[List[float]]:

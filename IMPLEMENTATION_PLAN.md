@@ -141,11 +141,14 @@ fallback / "act 1" of the demo.
   `scripts/operator_receiver.py` got the matching status. Verified on the EE.
 - [ ] *(Phase 7)* request side: the Flutter app sends start/destination to the planner.
 
-### Phase 6 — Operator Console (reuse Gradio)
-- [ ] Run Intel's `main.py` Gradio UI as `@route_operator`; replace its internal queue
-  source with an atsdk subscriber to the planner's `status.smartroute` pushes.
-- [ ] Keep `map_creator.py` / Folium rendering unchanged.
-- [ ] **Acceptance:** operator sees all active routes, intersections, agent reasoning, live.
+### Phase 6 — Operator Console (reuse Gradio) ✅ DONE
+- [x] `atsign/operator_console.py` runs as the operator atSign; an atSign subscriber feeds
+  `OperatorState` from the planner's `status.smartroute` pushes (geometry carried in status).
+- [x] Reuses Intel's `MapCreator` (Folium) to render the route; Gradio UI built (guarded
+  import; launch with `python -m atsign.operator_console`).
+- [x] **Acceptance MET:** with the planner pushing a reroute, the console renders the live
+  status panel + a Folium/Leaflet map (123 route points, ~14 KB map HTML). Verified headless
+  via `scripts/operator_console_test.py`.
 
 ### Phase 7 — Commuter Flutter app (`at_client_flutter`)
 - [ ] Scaffold from the `at_client_flutter` example app (main.dart + walkthrough.dart).

@@ -139,6 +139,7 @@ def main():
         optimal_route=chosen, distance_km=chosen_dist, reason=reason, rerouted=rerouted,
         agent_status="Active - rerouted" if rerouted else "Active - monitoring",
         intersections=[{"name": lt.get("intersection_name"), "density": lt.get("traffic_density")}] if lt else [],
+        points=route_push.points,
     )
     planner_pub.notify(roles.atsign_for("operator"), "status", status_push.model_dump_json())
     print(f"  PUSHED route -> {roles.atsign_for('commuter01')} | status -> {roles.atsign_for('operator')}")
