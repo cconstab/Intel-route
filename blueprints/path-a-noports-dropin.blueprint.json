@@ -1,0 +1,295 @@
+{
+  "version": "2.0",
+  "activeBrand": "atPlatform",
+  "timestamp": "2026-06-26T17:42:25.216Z",
+  "currentPageIndex": 0,
+  "metadata": {
+    "title": "Smart Route Planning — NoPorts Drop-in (Path A)",
+    "description": "Minimal-change hardening of Intel's Smart Route Planning Agent. ALL application code is reused unchanged — including live_traffic.py. The only edit repoints config.json host entries at local tunnel sockets, so every intersection (and even the UI) is reached over an encrypted tunnel with no open inbound ports. Contrast with the native pub/sub design (Path B).",
+    "author": "AI Architect MCP"
+  },
+  "pages": [
+    {
+      "id": 1782495745216,
+      "name": "Page 1",
+      "brand": "atPlatform",
+      "viewport": { "x": 0, "y": 0, "zoom": 0.65 },
+      "nodes": [
+        {
+          "id": "node_pa_commuter",
+          "type": "custom",
+          "position": { "x": 100, "y": 450 },
+          "data": {
+            "label": "Commuter",
+            "type": "person",
+            "notes": "**Suggested Atsign:** `@commuter01`\n\nA driver/traveller requesting the best route and watching it update live.\n\n- **KEEP:** uses the existing Gradio UI (`main.py`) — unchanged.\n- Reaches the planner's UI through an encrypted private tunnel — so even the UI exposes **no public port**.\n- Identified by their own Atsign.",
+            "nodeWidth": 290,
+            "nodeHeight": 280,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 280 },
+          "width": 290,
+          "height": 280
+        },
+        {
+          "id": "node_pa_maptile",
+          "type": "custom",
+          "position": { "x": 550, "y": 100 },
+          "data": {
+            "label": "Map Tile Service",
+            "type": "api",
+            "notes": "External third-party map/tile provider for rendering the route map (OpenStreetMap tiles via Folium/Leaflet in `map_creator.py`).\n\n- **KEEP:** unchanged from the Intel code.\n- Outside the app; reached over its public HTTP interface.\n- The only outward web dependency. No Atsign.",
+            "nodeWidth": 290,
+            "nodeHeight": 240,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 },
+          "width": 290,
+          "height": 240
+        },
+        {
+          "id": "node_pa_planner",
+          "type": "custom",
+          "position": { "x": 550, "y": 450 },
+          "data": {
+            "label": "Smart Route Planner",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@smartroute_planner`\n\nCore app — Python: LangGraph reasoning + Gradio map UI. **Unchanged from Intel.**\n\n- **KEEP (everything, incl. comms):** `route_planner.py`, `route_service.py`, `schema.py`, `main.py`, **and `live_traffic.py`** — it still polls each intersection exactly as before.\n- **Only edit:** `config.json` host entries point at local tunnel sockets instead of remote addresses. ~0 application code changed.\n- Reaches each intersection through an encrypted private tunnel; makes **outbound** connections only.\n- Own Atsign.",
+            "nodeWidth": 290,
+            "nodeHeight": 330,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 330 },
+          "width": 290,
+          "height": 330
+        },
+        {
+          "id": "node_pa_routedata",
+          "type": "custom",
+          "position": { "x": 550, "y": 800 },
+          "data": {
+            "label": "Route & Map Data",
+            "type": "thing",
+            "notes": "**KEEP (unchanged):** bundled GPX routes (`data/routes/*.gpx`) and static CSVs (`data/csv/*.csv`).\n\n- Candidate routes plus static condition data the planner reads.\n- Held privately by `@smartroute_planner`; read via `gpx_parser` / `route_service`.",
+            "nodeWidth": 290,
+            "nodeHeight": 240,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 },
+          "width": 290,
+          "height": 240
+        },
+        {
+          "id": "node_pa_market",
+          "type": "custom",
+          "position": { "x": 1000, "y": 100 },
+          "data": {
+            "label": "Intersection Agent — Market St",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@intxn_market_st`\n\nEdge AI agent at the Market St intersection (Intel Scene Intelligence).\n\n- **KEEP (unchanged):** keeps its existing traffic service exactly as Intel built it — no code change.\n- Reachable **only** through an encrypted private tunnel, so it exposes **no inbound port** (the firewall/NAT problem disappears).\n- The planner connects out to it; the agent never listens publicly.\n- Own Atsign.",
+            "nodeWidth": 290,
+            "nodeHeight": 300,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 300 },
+          "width": 290,
+          "height": 300
+        },
+        {
+          "id": "node_pa_fifth",
+          "type": "custom",
+          "position": { "x": 1000, "y": 450 },
+          "data": {
+            "label": "Intersection Agent — 5th Ave",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@intxn_5th_ave`\n\nSecond intersection — same role, different location.\n\n- **KEEP (unchanged):** existing traffic service, untouched.\n- A new intersection is added by establishing an encrypted private tunnel for its Atsign and adding one host entry — still no application code change.\n- Reachable only via encrypted tunnel; no inbound port.",
+            "nodeWidth": 290,
+            "nodeHeight": 300,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 300 },
+          "width": 290,
+          "height": 300
+        },
+        {
+          "id": "node_pa_broadway",
+          "type": "custom",
+          "position": { "x": 1000, "y": 800 },
+          "data": {
+            "label": "Intersection Agent — Broadway",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@intxn_broadway`\n\nThird intersection.\n\n- **KEEP (unchanged):** existing traffic service.\n- Demonstrates that many distributed agents are reachable with **zero open ports** — each via its own encrypted tunnel, addressed by Atsign not IP.\n- Own Atsign.",
+            "nodeWidth": 290,
+            "nodeHeight": 300,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 300 },
+          "width": 290,
+          "height": 300
+        },
+        {
+          "id": "node_pa_cameras",
+          "type": "custom",
+          "position": { "x": 1450, "y": 450 },
+          "data": {
+            "label": "Roadside Cameras & Sensors",
+            "type": "thing",
+            "notes": "Physical roadside cameras/sensors. Each intersection agent analyses its **own** local feed — shown here as one representative source.\n\n- **Reuse:** maps to the Intel Scene Intelligence input.\n- **Demo mode:** no real cameras needed — replaced by replay of the bundled `data/csv/*.csv`.",
+            "nodeWidth": 290,
+            "nodeHeight": 240,
+            "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 },
+          "width": 290,
+          "height": 240
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_pa_cam_market",
+          "type": "smoothstep",
+          "source": "node_pa_cameras",
+          "sourceHandle": "left",
+          "target": "node_pa_market",
+          "targetHandle": "right",
+          "animated": false,
+          "style": { "stroke": "#FFA3C1", "strokeWidth": 2.5, "strokeDasharray": "12,  8" },
+          "label": "Local camera & sensor feed",
+          "data": {
+            "connectionType": "stream",
+            "description": "Raw video/sensor data → on-edge vision analysis (Scene Intelligence)",
+            "notes": "Local camera & sensor feed"
+          }
+        },
+        {
+          "id": "edge_pa_cam_fifth",
+          "type": "smoothstep",
+          "source": "node_pa_cameras",
+          "sourceHandle": "left",
+          "target": "node_pa_fifth",
+          "targetHandle": "right",
+          "animated": false,
+          "style": { "stroke": "#FFA3C1", "strokeWidth": 2.5, "strokeDasharray": "12,  8" },
+          "label": "Local camera & sensor feed",
+          "data": {
+            "connectionType": "stream",
+            "description": "Raw video/sensor data → on-edge vision analysis (Scene Intelligence)",
+            "notes": "Local camera & sensor feed"
+          }
+        },
+        {
+          "id": "edge_pa_cam_broadway",
+          "type": "smoothstep",
+          "source": "node_pa_cameras",
+          "sourceHandle": "left",
+          "target": "node_pa_broadway",
+          "targetHandle": "right",
+          "animated": false,
+          "style": { "stroke": "#FFA3C1", "strokeWidth": 2.5, "strokeDasharray": "12,  8" },
+          "label": "Local camera & sensor feed",
+          "data": {
+            "connectionType": "stream",
+            "description": "Raw video/sensor data → on-edge vision analysis (Scene Intelligence)",
+            "notes": "Local camera & sensor feed"
+          }
+        },
+        {
+          "id": "edge_pa_planner_market",
+          "type": "smoothstep",
+          "source": "node_pa_planner",
+          "sourceHandle": "right",
+          "target": "node_pa_market",
+          "targetHandle": "left",
+          "animated": true,
+          "style": { "stroke": "#52B788", "strokeWidth": 2.5, "strokeDasharray": "5,  3" },
+          "label": "Polls live traffic (tunnel)",
+          "data": {
+            "connectionType": "tcp",
+            "description": "Existing traffic-service request carried over an encrypted private tunnel — agent has no inbound port",
+            "notes": "Polls live traffic (tunnel)"
+          }
+        },
+        {
+          "id": "edge_pa_planner_fifth",
+          "type": "smoothstep",
+          "source": "node_pa_planner",
+          "sourceHandle": "right",
+          "target": "node_pa_fifth",
+          "targetHandle": "left",
+          "animated": true,
+          "style": { "stroke": "#52B788", "strokeWidth": 2.5, "strokeDasharray": "5,  3" },
+          "label": "Polls live traffic (tunnel)",
+          "data": {
+            "connectionType": "tcp",
+            "description": "Existing traffic-service request carried over an encrypted private tunnel — agent has no inbound port",
+            "notes": "Polls live traffic (tunnel)"
+          }
+        },
+        {
+          "id": "edge_pa_planner_broadway",
+          "type": "smoothstep",
+          "source": "node_pa_planner",
+          "sourceHandle": "right",
+          "target": "node_pa_broadway",
+          "targetHandle": "left",
+          "animated": true,
+          "style": { "stroke": "#52B788", "strokeWidth": 2.5, "strokeDasharray": "5,  3" },
+          "label": "Polls live traffic (tunnel)",
+          "data": {
+            "connectionType": "tcp",
+            "description": "Existing traffic-service request carried over an encrypted private tunnel — agent has no inbound port",
+            "notes": "Polls live traffic (tunnel)"
+          }
+        },
+        {
+          "id": "edge_pa_planner_maptile",
+          "type": "smoothstep",
+          "source": "node_pa_planner",
+          "sourceHandle": "top",
+          "target": "node_pa_maptile",
+          "targetHandle": "bottom",
+          "animated": false,
+          "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" },
+          "label": "Loads map tiles (external)",
+          "data": {
+            "connectionType": "default",
+            "description": "Outbound to external tile service for map rendering (map_creator)",
+            "notes": "Loads map tiles (external)"
+          }
+        },
+        {
+          "id": "edge_pa_planner_routedata",
+          "type": "smoothstep",
+          "source": "node_pa_planner",
+          "sourceHandle": "bottom",
+          "target": "node_pa_routedata",
+          "targetHandle": "top",
+          "animated": false,
+          "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" },
+          "label": "Reads routes & static data",
+          "data": {
+            "connectionType": "default",
+            "description": "Reads GPX routes + static CSVs via gpx_parser / route_service",
+            "notes": "Reads routes & static data"
+          }
+        },
+        {
+          "id": "edge_pa_commuter_planner",
+          "type": "smoothstep",
+          "source": "node_pa_commuter",
+          "sourceHandle": "right",
+          "target": "node_pa_planner",
+          "targetHandle": "left",
+          "animated": true,
+          "style": { "stroke": "#52B788", "strokeWidth": 2.5, "strokeDasharray": "5,  3" },
+          "label": "UI over secure tunnel",
+          "data": {
+            "connectionType": "tcp",
+            "description": "Browser reaches the Gradio UI through an encrypted private tunnel — no public web port",
+            "notes": "UI over secure tunnel"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "version": "2.0",
+  "activeBrand": "atPlatform",
+  "timestamp": "2026-06-26T17:10:46.857Z",
+  "currentPageIndex": 0,
+  "metadata": {
+    "title": "Smart Route Planning on the Atsign Platform",
+    "description": "Hybrid migration of Intel's Smart Route Planning Agent with a zero-trust policy plane. LangGraph reasoning reused as a headless backend; transport swapped for encrypted, port-less identity-to-identity messaging. Data sources publish from their own Atsign. Flutter commuter app + Gradio operator console. The planner asks a Policy Manager whether an Atsign may publish/request/view.",
+    "author": "AI Architect MCP"
+  },
+  "pages": [
+    {
+      "id": 1782493846857,
+      "name": "Page 1",
+      "brand": "atPlatform",
+      "viewport": { "x": 0, "y": 0, "zoom": 0.4 },
+      "nodes": [
+        {
+          "id": "node_1782493873024_57tvu82f2",
+          "type": "custom",
+          "position": { "x": 150, "y": 450 },
+          "data": {
+            "label": "Roadside Cameras & Sensors",
+            "type": "thing",
+            "notes": "Physical roadside cameras/sensors. Each intersection agent analyses its **own** local feed — shown here as one representative source.\n\n- **Reuse:** maps to the Intel Scene Intelligence input (camera + vision pipeline).\n- **Demo mode:** no real cameras needed — replaced by replay of the bundled `data/csv/*.csv`.\n- Provides raw data: vehicle density, weather, incidents.",
+            "nodeWidth": 290, "nodeHeight": 240, "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 }, "width": 290, "height": 240
+        },
+        {
+          "id": "node_1782493876185_4ifaky6z0",
+          "type": "custom",
+          "position": { "x": 600, "y": 100 },
+          "data": {
+            "label": "Intersection Agent — Market St",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@intxn_market_st`\n\nEdge AI agent at the Market St intersection. Computer-vision scene analysis on its local camera (Intel Scene Intelligence).\n\n- **ADD (new — not in the repo):** a publisher reusing `schema.py` `LiveTrafficData`.\n- **Demo:** replays bundled CSV; swap in real Scene Intelligence later — same data shape.\n- Publishes `live_traffic.smartroute`: name, coords, density, weather, incident.\n- Own Atsign; **encrypted** push; never opens an inbound port.",
+            "nodeWidth": 290, "nodeHeight": 330, "showNotes": true
+          },
+          "style": { "width": 290, "height": 330 }, "width": 290, "height": 330
+        },
+        {
+          "id": "node_1782493879555_3cdgd9fkf",
+          "type": "custom",
+          "position": { "x": 600, "y": 450 },
+          "data": {
+            "label": "Intersection Agent — 5th Ave",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@intxn_5th_ave`\n\nSecond distributed intersection agent — identical role, different location.\n\n- **ADD (new):** same publisher build, reusing `schema.py` `LiveTrafficData`.\n- **Extensibility:** a new intersection joins by registering a new Atsign in the `.smartroute` namespace — **policy-gated**, no code change on the planner.\n- Analyses its own camera; pushes encrypted live traffic; no open inbound ports.",
+            "nodeWidth": 290, "nodeHeight": 330, "showNotes": true
+          },
+          "style": { "width": 290, "height": 330 }, "width": 290, "height": 330
+        },
+        {
+          "id": "node_1782493882476_oe87uo8um",
+          "type": "custom",
+          "position": { "x": 600, "y": 800 },
+          "data": {
+            "label": "Intersection Agent — Broadway",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@intxn_broadway`\n\nThird distributed intersection agent.\n\n- **ADD (new):** same publisher pattern, reusing `schema.py`.\n- Demonstrates **fan-in**: the planner aggregates updates from many independent, geographically separate agents knowing only their Atsigns — no network address.\n- Analyses its local feed for congestion/weather/incidents.",
+            "nodeWidth": 290, "nodeHeight": 330, "showNotes": true
+          },
+          "style": { "width": 290, "height": 330 }, "width": 290, "height": 330
+        },
+        {
+          "id": "node_weatherfeed_w1a2b3",
+          "type": "custom",
+          "position": { "x": 600, "y": 1150 },
+          "data": {
+            "label": "Weather Feed",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@weather_feed`\n\nWeather-conditions provider for points along candidate routes.\n\n- **Reuse:** wraps the existing `weather_report.py` controller (`RouteStatusInterface`); publishes `schema.py` `WeatherData` (condition, temperature, visibility).\n- **Demo:** replays `data/csv/weather_report.csv`; point at a real weather provider later — no planner change.\n- Publishes `weather.smartroute`; own Atsign; encrypted push, no inbound port.",
+            "nodeWidth": 290, "nodeHeight": 280, "showNotes": true
+          },
+          "style": { "width": 290, "height": 280 }, "width": 290, "height": 280
+        },
+        {
+          "id": "node_traffictrends_t4c5d6",
+          "type": "custom",
+          "position": { "x": 600, "y": 1500 },
+          "data": {
+            "label": "Traffic Trends Feed",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@traffic_trends_feed`\n\nHistorical traffic-trends provider for route points.\n\n- **Reuse:** wraps `traffic_trends.py`; publishes `TrafficTrendsData` (vehicle_count, avg_speed, congestion_level).\n- **Demo:** replays `data/csv/traffic_trends.csv`.\n- Publishes `traffic_trends.smartroute`; own Atsign; encrypted push.",
+            "nodeWidth": 290, "nodeHeight": 280, "showNotes": true
+          },
+          "style": { "width": 290, "height": 280 }, "width": 290, "height": 280
+        },
+        {
+          "id": "node_plannedevents_e7f8g9",
+          "type": "custom",
+          "position": { "x": 600, "y": 1850 },
+          "data": {
+            "label": "Planned Events Feed",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@events_feed`\n\nPlanned-events provider (concerts, games, closures) affecting routes.\n\n- **Reuse:** wraps `planned_events.py`; publishes `PlannedEventsData` (event_name, congestion_level).\n- **Demo:** replays `data/csv/planned_events.csv`.\n- Publishes `planned_events.smartroute`; own Atsign; encrypted push.",
+            "nodeWidth": 290, "nodeHeight": 280, "showNotes": true
+          },
+          "style": { "width": 290, "height": 280 }, "width": 290, "height": 280
+        },
+        {
+          "id": "node_1782493885236_zq9079u7x",
+          "type": "custom",
+          "position": { "x": 1100, "y": 350 },
+          "data": {
+            "label": "Map Tile Service",
+            "type": "api",
+            "notes": "External third-party map/tile provider for rendering the route map (OpenStreetMap tiles via Folium/Leaflet on the operator console; a mobile map widget on the commuter app).\n\n- **KEEP:** unchanged from the Intel code.\n- Lives **outside** the app; reached over its public HTTP interface.\n- The **only** outward web dependency. No Atsign (not part of the network).",
+            "nodeWidth": 290, "nodeHeight": 260, "showNotes": true
+          },
+          "style": { "width": 290, "height": 260 }, "width": 290, "height": 260
+        },
+        {
+          "id": "node_1782493888501_yztbu9zwz",
+          "type": "custom",
+          "position": { "x": 1100, "y": 850 },
+          "data": {
+            "label": "Smart Route Planner",
+            "type": "aiAgent",
+            "notes": "**Suggested Atsign:** `@smartroute_planner`\n\nHeadless backend agent — LangGraph reasoning + the comms layer. No UI of its own.\n\n- **KEEP (unchanged):** `route_planner.py` (LangGraph), `planner_state.py`, `route_service.py`, `utils/*`, `schema.py`. (`main.py`'s UI now runs as the Operator Console.)\n- **SWAP:** body of `live_traffic.py` — reads a cache filled by subscriptions, not polling. `RouteStatusInterface` unchanged, so the graph is untouched.\n- **ADD:** a subscriber for all `.smartroute` publishers; **pushes** route + reroute alerts to commuter apps and the operator console.\n- **Trust:** consults the Policy Manager (not a hardcoded list) to authorize publishers/clients.\n- Own Atsign; encrypted; **no inbound port**.",
+            "nodeWidth": 290, "nodeHeight": 440, "showNotes": true
+          },
+          "style": { "width": 290, "height": 440 }, "width": 290, "height": 440
+        },
+        {
+          "id": "node_1782493890432_zbru6ohob",
+          "type": "custom",
+          "position": { "x": 1100, "y": 1500 },
+          "data": {
+            "label": "Route & Map Data",
+            "type": "thing",
+            "notes": "**KEEP (unchanged):** the bundled GPX routes (`data/routes/*.gpx`).\n\n- Candidate routes the planner picks from to compute the shortest direct route and alternates.\n- Held privately by `@smartroute_planner`; read via `gpx_parser` / `route_service`.\n- (The weather/traffic/events CSVs now sit behind their own feed Atsigns.)",
+            "nodeWidth": 290, "nodeHeight": 250, "showNotes": true
+          },
+          "style": { "width": 290, "height": 250 }, "width": 290, "height": 250
+        },
+        {
+          "id": "node_pb_commuter_app",
+          "type": "custom",
+          "position": { "x": 1650, "y": 600 },
+          "data": {
+            "label": "Commuter Mobile App (Flutter)",
+            "type": "process",
+            "notes": "**Suggested Atsign:** `@commuter01`\n\n**ADD (new):** Flutter mobile app — the commuter's surface. Holds the commuter's own Atsign.\n\n- Sends start/destination to the planner and **receives pushed route updates + reroute alerts** in real time (even when backgrounded).\n- Renders the live route on a map widget; pops an alert when the route changes (flood, accident, congestion).\n- Reuses the planner's route geometry (`RoutePoints` in `schema.py`); no open ports; works over cellular/NAT.",
+            "nodeWidth": 290, "nodeHeight": 320, "showNotes": true
+          },
+          "style": { "width": 290, "height": 320 }, "width": 290, "height": 320
+        },
+        {
+          "id": "node_1782493892689_a3p3oh7xr",
+          "type": "custom",
+          "position": { "x": 2200, "y": 600 },
+          "data": {
+            "label": "Commuter",
+            "type": "person",
+            "notes": "A driver/traveller. Uses the mobile app to ask for the best route and gets live reroute alerts on the move.\n\n- Identified by their own Atsign (held by the app); reaches the planner privately — no account or password.\n- In production each commuter has their own Atsign and app install.",
+            "nodeWidth": 290, "nodeHeight": 240, "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 }, "width": 290, "height": 240
+        },
+        {
+          "id": "node_pb_operator_console",
+          "type": "custom",
+          "position": { "x": 1650, "y": 1200 },
+          "data": {
+            "label": "Operator Console (Gradio)",
+            "type": "process",
+            "notes": "**Suggested Atsign:** `@route_operator`\n\n**KEEP (reused):** Intel's Gradio UI (`main.py`), reframed as the city control-room console.\n\n- Monitors **all** routes, intersections, and the agent's reasoning/status across the network.\n- Receives live updates pushed by the planner; renders the Folium map (`map_creator.py`).\n- Own Atsign; the operator proves identity to view — no inbound port.",
+            "nodeWidth": 290, "nodeHeight": 300, "showNotes": true
+          },
+          "style": { "width": 290, "height": 300 }, "width": 290, "height": 300
+        },
+        {
+          "id": "node_pb_operator",
+          "type": "custom",
+          "position": { "x": 2200, "y": 1200 },
+          "data": {
+            "label": "Operator",
+            "type": "person",
+            "notes": "Control-room / traffic-authority staff. Watches the whole network — every intersection, all active routes, and why the agent rerouted.\n\n- Identified by their own registered Atsign; only authorised operators may view.",
+            "nodeWidth": 290, "nodeHeight": 240, "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 }, "width": 290, "height": 240
+        },
+        {
+          "id": "node_pb_policy_mgr",
+          "type": "custom",
+          "position": { "x": 1650, "y": 1850 },
+          "data": {
+            "label": "Policy Manager",
+            "type": "process",
+            "notes": "**Suggested Atsign:** `@route_policy`\n\n**ADD (new):** the trust plane — a centralized, zero-trust **policy engine** with its own Atsign.\n\n- The planner does **not** hardcode who may join. It asks the engine: *is this Atsign allowed to publish live data, request routes, or view the network?* — **default-deny**.\n- **Policies are stored as encrypted records in the engine's own Atsign store** by default; pluggable to an external **database** for scale.\n- Evaluates rules by **identity + role + action**; the **Policy Admin** maintains them.\n- New publishers join **only when policy permits** → safe dynamic onboarding; segregation of duties (security owns policy, not the app code).",
+            "nodeWidth": 290, "nodeHeight": 320, "showNotes": true
+          },
+          "style": { "width": 290, "height": 320 }, "width": 290, "height": 320
+        },
+        {
+          "id": "node_pb_policy_admin",
+          "type": "custom",
+          "position": { "x": 2200, "y": 1850 },
+          "data": {
+            "label": "Policy Admin",
+            "type": "person",
+            "notes": "Security / operations admin who owns the access rules. Separate from the city Operator (segregation of duties).\n\n- Defines which Atsigns may publish, request, or view — by identity and role.\n- Identified by their own registered Atsign.",
+            "nodeWidth": 290, "nodeHeight": 240, "showNotes": true
+          },
+          "style": { "width": 290, "height": 240 }, "width": 290, "height": 240
+        }
+      ],
+      "edges": [
+        { "id": "edge_ncn87rzbem00", "type": "smoothstep", "source": "node_1782493873024_57tvu82f2", "sourceHandle": "right", "target": "node_1782493876185_4ifaky6z0", "targetHandle": "left", "animated": false, "style": { "stroke": "#FFA3C1", "strokeWidth": 2.5, "strokeDasharray": "12,  8" }, "label": "Local camera & sensor feed", "data": { "connectionType": "stream", "description": "Raw video/sensor data → on-edge vision analysis (Scene Intelligence)", "notes": "Local camera & sensor feed" } },
+        { "id": "edge_7getiekzxcg0", "type": "smoothstep", "source": "node_1782493873024_57tvu82f2", "sourceHandle": "right", "target": "node_1782493879555_3cdgd9fkf", "targetHandle": "left", "animated": false, "style": { "stroke": "#FFA3C1", "strokeWidth": 2.5, "strokeDasharray": "12,  8" }, "label": "Local camera & sensor feed", "data": { "connectionType": "stream", "description": "Raw video/sensor data → on-edge vision analysis (Scene Intelligence)", "notes": "Local camera & sensor feed" } },
+        { "id": "edge_g1se599y2ds0", "type": "smoothstep", "source": "node_1782493873024_57tvu82f2", "sourceHandle": "right", "target": "node_1782493882476_oe87uo8um", "targetHandle": "left", "animated": false, "style": { "stroke": "#FFA3C1", "strokeWidth": 2.5, "strokeDasharray": "12,  8" }, "label": "Local camera & sensor feed", "data": { "connectionType": "stream", "description": "Raw video/sensor data → on-edge vision analysis (Scene Intelligence)", "notes": "Local camera & sensor feed" } },
+        { "id": "edge_x7wmmgn2a9l0", "type": "smoothstep", "source": "node_1782493876185_4ifaky6z0", "sourceHandle": "bottom", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "top", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes live traffic", "data": { "connectionType": "notification", "description": "Record live_traffic.smartroute: name, lat/long, density, weather, incident — encrypted push, no polling", "notes": "Pushes live traffic" } },
+        { "id": "edge_8xk6rdyvfow0", "type": "smoothstep", "source": "node_1782493879555_3cdgd9fkf", "sourceHandle": "right", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "left", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes live traffic", "data": { "connectionType": "notification", "description": "Record live_traffic.smartroute: name, lat/long, density, weather, incident — encrypted push, no polling", "notes": "Pushes live traffic" } },
+        { "id": "edge_utw2kd2s3yj0", "type": "smoothstep", "source": "node_1782493882476_oe87uo8um", "sourceHandle": "right", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "left", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes live traffic", "data": { "connectionType": "notification", "description": "Record live_traffic.smartroute: name, lat/long, density, weather, incident — encrypted push, no polling", "notes": "Pushes live traffic" } },
+        { "id": "edge_weather_planner", "type": "smoothstep", "source": "node_weatherfeed_w1a2b3", "sourceHandle": "right", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "left", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes weather conditions", "data": { "connectionType": "notification", "description": "Record weather.smartroute: condition, temperature, visibility — reuses WeatherData", "notes": "Pushes weather conditions" } },
+        { "id": "edge_traffic_planner", "type": "smoothstep", "source": "node_traffictrends_t4c5d6", "sourceHandle": "top", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "bottom", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes traffic trends", "data": { "connectionType": "notification", "description": "Record traffic_trends.smartroute: vehicle_count, avg_speed, congestion_level — reuses TrafficTrendsData", "notes": "Pushes traffic trends" } },
+        { "id": "edge_events_planner", "type": "smoothstep", "source": "node_plannedevents_e7f8g9", "sourceHandle": "top", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "bottom", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes planned events", "data": { "connectionType": "notification", "description": "Record planned_events.smartroute: event_name, congestion_level — reuses PlannedEventsData", "notes": "Pushes planned events" } },
+        { "id": "edge_d2ypd73s87p0", "type": "smoothstep", "source": "node_1782493888501_yztbu9zwz", "sourceHandle": "bottom", "target": "node_1782493890432_zbru6ohob", "targetHandle": "top", "animated": false, "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" }, "label": "Reads candidate routes", "data": { "connectionType": "default", "description": "Reads GPX routes via gpx_parser / route_service", "notes": "Reads candidate routes" } },
+        { "id": "edge_zsnkyhklr6d0", "type": "smoothstep", "source": "node_1782493888501_yztbu9zwz", "sourceHandle": "top", "target": "node_1782493885236_zq9079u7x", "targetHandle": "bottom", "animated": false, "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" }, "label": "Loads map tiles (external)", "data": { "connectionType": "default", "description": "Outbound to external tile service for map rendering", "notes": "Loads map tiles (external)" } },
+        { "id": "edge_pb_person_app", "type": "smoothstep", "source": "node_1782493892689_a3p3oh7xr", "sourceHandle": "left", "target": "node_pb_commuter_app", "targetHandle": "right", "animated": false, "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" }, "label": "Enters start & destination", "data": { "connectionType": "default", "description": "Driver sets origin/destination and views the live route", "notes": "Enters start & destination" } },
+        { "id": "edge_pb_app_planner", "type": "smoothstep", "source": "node_pb_commuter_app", "sourceHandle": "left", "target": "node_1782493888501_yztbu9zwz", "targetHandle": "right", "animated": false, "style": { "stroke": "#D37AFF", "strokeWidth": 2.5, "strokeDasharray": "3,  5" }, "label": "Requests optimal route", "data": { "connectionType": "sync", "description": "Start/destination request from the commuter's app", "notes": "Requests optimal route" } },
+        { "id": "edge_pb_planner_app", "type": "smoothstep", "source": "node_1782493888501_yztbu9zwz", "sourceHandle": "right", "target": "node_pb_commuter_app", "targetHandle": "left", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes route & reroute alerts", "data": { "connectionType": "notification", "description": "Optimal route geometry + live reroute alerts pushed to the phone", "notes": "Pushes route & reroute alerts" } },
+        { "id": "edge_pb_operator_console", "type": "smoothstep", "source": "node_pb_operator", "sourceHandle": "left", "target": "node_pb_operator_console", "targetHandle": "right", "animated": false, "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" }, "label": "Monitors the network", "data": { "connectionType": "default", "description": "Operator views all routes & the agent's reasoning", "notes": "Monitors the network" } },
+        { "id": "edge_pb_planner_console", "type": "smoothstep", "source": "node_1782493888501_yztbu9zwz", "sourceHandle": "right", "target": "node_pb_operator_console", "targetHandle": "left", "animated": true, "style": { "stroke": "#FFA500", "strokeDasharray": "3,  6", "strokeWidth": 2.5 }, "label": "Pushes live routes & status", "data": { "connectionType": "notification", "description": "All active routes, intersection states & agent status pushed to the console", "notes": "Pushes live routes & status" } },
+        { "id": "edge_pb_planner_policy", "type": "smoothstep", "source": "node_1782493888501_yztbu9zwz", "sourceHandle": "bottom", "target": "node_pb_policy_mgr", "targetHandle": "top", "animated": false, "style": { "stroke": "#42AAD7", "strokeWidth": 2.5, "strokeDasharray": "8,  4,  2,  4" }, "label": "Authorizes publishers & clients", "data": { "connectionType": "rpc", "description": "Planner asks 'is this Atsign allowed to publish/request/view?' — request/response, default-deny", "notes": "Authorizes publishers & clients" } },
+        { "id": "edge_pb_admin_policy", "type": "smoothstep", "source": "node_pb_policy_admin", "sourceHandle": "left", "target": "node_pb_policy_mgr", "targetHandle": "right", "animated": false, "style": { "stroke": "#8C9BB7", "strokeWidth": 2.5, "strokeDasharray": "6,  6" }, "label": "Defines access rules", "data": { "connectionType": "default", "description": "Sets who may publish, request, or view — by identity & role", "notes": "Defines access rules" } }
+      ]
+    }
+  ]
+}

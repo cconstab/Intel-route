@@ -1,0 +1,18 @@
+{
+  "_comment": "Role -> Atsign map. 'ee' = NATO atSign in the local ephemeral environment (demo/test). 'vanity' = the suggested registered atSign for production. namespace + rootDomain apply to all.",
+  "namespace": "smartroute",
+  "rootDomain": "vip.ve.atsign.zone:64",
+  "roles": {
+    "planner":             { "ee": "@alpha",   "vanity": "@smartroute_planner" },
+    "intxn_market_st":     { "ee": "@bravo",   "vanity": "@intxn_market_st" },
+    "intxn_5th_ave":       { "ee": "@charlie", "vanity": "@intxn_5th_ave" },
+    "intxn_broadway":      { "ee": "@delta",   "vanity": "@intxn_broadway" },
+    "weather_feed":        { "ee": "@echo",    "vanity": "@weather_feed" },
+    "traffic_trends_feed": { "ee": "@foxtrot", "vanity": "@traffic_trends_feed" },
+    "events_feed":         { "ee": "@golf",    "vanity": "@events_feed" },
+    "operator":            { "ee": "@hotel",   "vanity": "@route_operator" },
+    "policy":              { "ee": "@juliet",  "vanity": "@route_policy" },
+    "policy_admin":        { "ee": "@kilo",    "vanity": "@route_policy_admin" },
+    "commuter01":          { "ee": "@india",   "vanity": "@commuter01" }
+  }
+}
