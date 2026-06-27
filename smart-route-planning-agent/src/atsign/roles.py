@@ -16,8 +16,10 @@ _CFG = None
 def _load():
     global _CFG
     if _CFG is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.normpath(os.path.join(here, "..", "..", "..", "config", "ee_atsigns.json"))
+        path = os.environ.get("ATSIGN_CONFIG")
+        if not path:
+            here = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.normpath(os.path.join(here, "..", "..", "..", "config", "ee_atsigns.json"))
         with open(path) as f:
             _CFG = json.load(f)
     return _CFG

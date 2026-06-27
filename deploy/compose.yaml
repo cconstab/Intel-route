@@ -1,0 +1,61 @@
+# Deployment topology — one container per atSign role (the real value: each runs on
+# its own machine, behind its own identity, with no open inbound ports).
+#
+# This compose runs them on one host for convenience. Each service mounts ONLY its
+# own atSign's keys. Set ATSIGN_PROFILE=ee to target the local ephemeral environment,
+# or vanity (default) for registered production atSigns.
+#
+# NOTE: the live demo runs natively (see scripts/run_demo.sh); this file is the
+# production-shaped packaging. Build once:  docker build -f deploy/Dockerfile -t smartroute .
+x-svc: &svc
+  image: smartroute:latest
+  environment:
+    ATSIGN_PROFILE: ${ATSIGN_PROFILE:-vanity}
+  restart: unless-stopped
+
+services:
+  policy:
+    <<: *svc
+    command: ["python", "-m", "atsign.policy_engine", "--repeat", "100000", "--interval", "30"]
+    volumes: ["./keys/policy:/keys/.atsign/keys:ro"]
+
+  planner:
+    <<: *svc
+    command: ["python", "scripts/planner_subscriber.py"]
+    volumes: ["./keys/planner:/keys/.atsign/keys:ro"]
+
+  operator:
+    <<: *svc
+    command: ["python", "-m", "atsign.operator_console"]
+    ports: ["7865:7865"]
+    volumes: ["./keys/operator:/keys/.atsign/keys:ro"]
+
+  intxn-market-st:
+    <<: *svc
+    command: ["python", "-m", "atsign.publishers.intersection", "--role", "intxn_market_st", "--count", "100000", "--interval", "10"]
+    volumes: ["./keys/intxn_market_st:/keys/.atsign/keys:ro"]
+
+  intxn-5th-ave:
+    <<: *svc
+    command: ["python", "-m", "atsign.publishers.intersection", "--role", "intxn_5th_ave", "--count", "100000", "--interval", "10"]
+    volumes: ["./keys/intxn_5th_ave:/keys/.atsign/keys:ro"]
+
+  intxn-broadway:
+    <<: *svc
+    command: ["python", "-m", "atsign.publishers.intersection", "--role", "intxn_broadway", "--count", "100000", "--interval", "10"]
+    volumes: ["./keys/intxn_broadway:/keys/.atsign/keys:ro"]
+
+  weather-feed:
+    <<: *svc
+    command: ["python", "-m", "atsign.publishers.feed", "--role", "weather_feed", "--count", "0", "--interval", "30"]
+    volumes: ["./keys/weather_feed:/keys/.atsign/keys:ro"]
+
+  traffic-trends-feed:
+    <<: *svc
+    command: ["python", "-m", "atsign.publishers.feed", "--role", "traffic_trends_feed", "--count", "0", "--interval", "30"]
+    volumes: ["./keys/traffic_trends_feed:/keys/.atsign/keys:ro"]
+
+  events-feed:
+    <<: *svc
+    command: ["python", "-m", "atsign.publishers.feed", "--role", "events_feed", "--count", "0", "--interval", "30"]
+    volumes: ["./keys/events_feed:/keys/.atsign/keys:ro"]

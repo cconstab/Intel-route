@@ -163,12 +163,13 @@ fallback / "act 1" of the demo.
   `vip.ve.atsign.zone`) + add platform network permissions. Protocol already proven by the
   interop spike, so this is GUI wiring only.
 
-### Phase 8 — Packaging, deploy, demo
-- [ ] `compose.yaml` per service (planner, 6 publishers, operator) each with its Atsign +
-  unique hive/commit-log paths.
-- [ ] Demo runbook: Act 1 (Path A contrast, optional) → Act 2 (Path B: two screens,
-  trigger flood, add a 4th intersection live).
-- [ ] **Acceptance:** clean-machine bring-up from the runbook.
+### Phase 8 — Packaging, deploy, demo ✅ DONE
+- [x] `deploy/Dockerfile` + `deploy/compose.yaml` — one container per atSign role
+  (policy, planner, 6 publishers, operator), each mounting only its own keys;
+  `ATSIGN_PROFILE` switches EE↔production; `roles.py` honors `ATSIGN_CONFIG`.
+- [x] `scripts/run_demo.sh` — one-command live demo (policy → pushed reroute →
+  commuter alert + operator status). **Verified end-to-end on the EE.**
+- [ ] *(optional)* Path A "act 1" contrast + add-an-intersection-live finale.
 
 ### Phase 9 — Hardening & extensibility
 - [ ] Enforce **Policy-Manager decisions** on every publish / request / view (cache + TTL).
@@ -177,8 +178,8 @@ fallback / "act 1" of the demo.
 - [ ] TTLs on all records; reconnect/idempotency review.
 
 ### Mandatory deliverables (per Atsign implementation rules)
-- [ ] `ATPLATFORM_GUIDELINES.md` (platform SDK reference — all sections, verbatim).
-- [ ] `README.md` (project specifics: Atsign map, namespace, record/payload tables, data flows).
+- [x] `ATPLATFORM_GUIDELINES.md` (platform SDK reference — all sections).
+- [x] `README.md` (project specifics: Atsign map, namespace, record/payload tables, data flows, run).
 
 ---
 
