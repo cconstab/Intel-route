@@ -15,7 +15,6 @@ dependencies:
   at_commons: ^5.0.0
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
-  url_launcher: ^6.3.0
   path_provider: ^2.1.4
 
 dev_dependencies:

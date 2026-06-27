@@ -153,8 +153,9 @@ fallback / "act 1" of the demo.
 ### Phase 7 — Commuter Flutter app (`at_client_flutter`) ✅ DONE (code complete)
 - [x] Scaffolded `commuter_app/` (Flutter 3.41); deps `at_client_flutter` / `at_client` /
   `at_auth` / `flutter_map` / `latlong2` / `url_launcher`.
-- [x] **MANDATORY first-run Atsign gate** implemented; auth via keychain + `.atKeys` file
-  (registrar onboarding + APKAM follow the example identically — stubs noted).
+- [x] Sign-in screen uses `AtSignSelectionDialog` — pick an **atSign AND root server**
+  (production or the `vip.ve.atsign.zone:64` test env, or type a custom domain), then auth
+  via device keychain or `.atKeys` file. (Starter-pack gate removed per product direction.)
 - [x] Subscribes `route.smartroute` → renders `flutter_map` (OSM tiles) with the route
   polyline + start/end markers + a reroute alert banner.
 - [x] Sends start/destination request to the planner (`request.smartroute`).

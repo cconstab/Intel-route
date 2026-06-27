@@ -116,7 +116,8 @@ python scripts/planner_run.py        # single reroute + push
 python scripts/onboarding_finale.py  # a new intersection joins live (policy-gated)
 ```
 
-Flutter app: `cd commuter_app && flutter run` (point at the EE via a custom root domain).
+Flutter app: `cd commuter_app && flutter run` — the sign-in screen lets you pick the
+**root server** (production or the `vip.ve.atsign.zone` test env) and your atSign.
 
 ## Status
 

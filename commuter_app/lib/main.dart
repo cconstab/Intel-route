@@ -15,11 +15,15 @@ import 'package:at_auth/at_auth.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 const String kNamespace = 'smartroute';
 const String kPlannerAtSign = '@smartroute_planner'; // EE: @alpha
-const String kStarterPack = 'https://my.atsign.com/starterpack_app';
+
+// Root servers offered in the sign-in dialog (production + local test environment).
+final Map<String, AtRootDomain> kRootDomains = {
+  'root.atsign.org (production)': AtRootDomain.atsignDomain,
+  'vip.ve.atsign.zone:64 (test env)': const AtRootDomain('vip.ve.atsign.zone', 64),
+};
 
 void main() => runApp(const CommuterApp());
 
@@ -30,89 +34,13 @@ class CommuterApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart Route — Commuter',
       theme: ThemeData(colorSchemeSeed: Colors.green, useMaterial3: true),
-      home: const Bootstrap(),
+      home: const AuthScreen(),
     );
   }
 }
 
-/// Decides between the mandatory Atsign gate and the auth screen on launch.
-class Bootstrap extends StatefulWidget {
-  const Bootstrap({super.key});
-  @override
-  State<Bootstrap> createState() => _BootstrapState();
-}
-
-class _BootstrapState extends State<Bootstrap> {
-  Widget? _next;
-
-  @override
-  void initState() {
-    super.initState();
-    _decide();
-  }
-
-  Future<void> _decide() async {
-    final atsigns = await KeychainStorage().getAllAtsigns();
-    if (!mounted) return;
-    setState(() =>
-        _next = atsigns.isEmpty ? const AtsignGateScreen() : const AuthScreen());
-  }
-
-  @override
-  Widget build(BuildContext context) =>
-      _next ?? const Scaffold(body: Center(child: CircularProgressIndicator()));
-}
-
-/// MANDATORY first-run Atsign gate (per Atsign Platform implementation rules).
-class AtsignGateScreen extends StatelessWidget {
-  const AtsignGateScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Using this app requires an Atsign.',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              const Text(
-                'If you already have an Atsign, tap "Continue."\n\n'
-                'Or, get free, temporary Atsigns via the Starter Pack:\n'
-                '1. Tap "Get My Starter Pack" or visit my.atsign.com/starterpack_app.\n'
-                '2. Enter your email address.\n'
-                '3. Verify your email with a one-time passcode.\n'
-                '4. Come back to the app and tap "Continue."',
-              ),
-              const SizedBox(height: 28),
-              FilledButton.icon(
-                icon: const Icon(Icons.card_giftcard),
-                label: const Text('Get My Starter Pack'),
-                onPressed: () =>
-                    launchUrl(Uri.parse(kStarterPack), mode: LaunchMode.externalApplication),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AuthScreen()),
-                ),
-                child: const Text('Continue'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Welcome / auth screen — keychain + .atKeys file (the demo-relevant workflows;
-/// registrar onboarding + APKAM follow the at_client_flutter example identically).
+/// Sign-in screen — pick an atSign AND the root server (production or test env),
+/// then authenticate from the device keychain or a `.atKeys` file.
 class AuthScreen extends StatelessWidget {
   const AuthScreen({super.key});
 
@@ -133,44 +61,62 @@ class AuthScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _loginFromKeychain(BuildContext context) async {
-    final atsigns = await KeychainStorage().getAllAtsigns();
-    if (atsigns.isEmpty || !context.mounted) return;
-    final req = AtAuthRequest(atsigns.first,
-        atKeysIo: KeychainAtKeysIo(), rootDomain: AtRootDomain.atsignDomain);
-    final resp = await PkamDialog.show(context, request: req, backupKeys: [KeychainAtKeysIo()]);
+  Future<void> _finish(BuildContext context, AtAuthRequest authReq) async {
+    final resp = await PkamDialog.show(context, request: authReq, backupKeys: [KeychainAtKeysIo()]);
     if (resp != null && resp.isSuccessful && context.mounted) {
-      await _afterAuth(context, req, resp);
+      await _afterAuth(context, authReq, resp);
     }
   }
 
-  Future<void> _loginFromFile(BuildContext context) async {
-    final atKeysIo = await AtKeysFileDialog.show(context);
-    if (atKeysIo == null || !context.mounted) return;
-    final atSign = atKeysIo.filePath!('').split('/').last.split('_').first;
-    final req = AtAuthRequest(atSign, atKeysIo: atKeysIo, rootDomain: AtRootDomain.atsignDomain);
-    final resp = await PkamDialog.show(context, request: req, backupKeys: [KeychainAtKeysIo()]);
-    if (resp != null && resp.isSuccessful && context.mounted) {
-      await _afterAuth(context, req, resp);
+  Future<void> _signIn(BuildContext context) async {
+    final existing = await KeychainStorage().getAllAtsigns();
+    if (!context.mounted) return;
+
+    // atSign + root-server picker (defaults shown; user can type a custom domain).
+    final req = await AtSignSelectionDialog.show(
+      context,
+      existingAtSigns: existing,
+      existingDomains: kRootDomains,
+    );
+    if (req == null || !context.mounted) return;
+    final atSign = req.atSign;
+    final rootDomain = req.rootDomain;
+
+    // Use device keychain if we already hold this atSign's keys; otherwise load an .atKeys file.
+    if (existing.contains(atSign)) {
+      await _finish(context, AtAuthRequest(atSign, atKeysIo: KeychainAtKeysIo(), rootDomain: rootDomain));
+    } else {
+      final fileIo = await AtKeysFileDialog.show(context);
+      if (fileIo == null || !context.mounted) return;
+      await _finish(context, AtAuthRequest(atSign, atKeysIo: fileIo, rootDomain: rootDomain));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in with your Atsign')),
+      appBar: AppBar(title: const Text('Smart Route — Commuter')),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FilledButton(
-                onPressed: () => _loginFromKeychain(context),
-                child: const Text('Login from this device')),
-            const SizedBox(height: 12),
-            OutlinedButton(
-                onPressed: () => _loginFromFile(context),
-                child: const Text('Login with .atKeys file')),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.alt_route, size: 64, color: Colors.green),
+              const SizedBox(height: 16),
+              const Text('Sign in with your Atsign',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Choose your atSign and root server to continue.',
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                icon: const Icon(Icons.login),
+                label: const Text('Sign in'),
+                onPressed: () => _signIn(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
