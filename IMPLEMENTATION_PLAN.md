@@ -68,25 +68,27 @@ fallback / "act 1" of the demo.
 - [x] Trust model **decided: a policy engine** (atKeys store + DB-pluggable). Policy atSign
   (`@juliet` / vanity `@route_policy`) provisioned. Build is Phase 2b.
 
-### Phase 1 — Wire contract + cross-language interop
-- [ ] Promote `spike/payload.py` into a shared contract module; align field names 1:1
-  with `schema.py` (`LiveTrafficData`, `WeatherData`, `TrafficTrendsData`, `PlannedEventsData`, `RoutePoints`).
-- [ ] Define record names + payloads (see §4 table) and document in `README.md`.
+### Phase 1 — Wire contract + cross-language interop ✅ DONE
+- [x] Shared contract `src/atsign/wire.py` — the wire IS the `schema.py` Pydantic model
+  serialized (`encode`/`decode`/`RECORDS`); `roles.py` resolves role→atSign from config.
+- [x] Record names defined (`live_traffic`/`weather`/`traffic_trends`/`planned_events`,
+  namespace `smartroute`); `key_name_from_atkey` handles both Dart & atsdk key renderings.
 - [x] **Interop spike (critical) — DONE ✅:** Python `atsdk` `notify` → Dart `at_client`
   `subscribe` decrypt, **and** Dart → Python, both verified against a live atServer with
   the `LiveTrafficData` payload intact (see `spike/interop_dart/` + `spike/README.md`).
   AES/RSA/IV are interoperable; the cross-language hop is **not** a blocker.
 
-### Phase 2 — Publishers (intersections + conditions feeds)
-- [ ] Generalize `spike/publisher.py` into a reusable `Publisher` (atSign, namespace,
-  record name, payload builder, interval).
-- [ ] Intersection publisher: emit `live_traffic.smartroute` from `data/csv/*.csv`
-  (demo) — fields per `LiveTrafficData`.
-- [ ] Weather/Traffic-trends/Events publishers: wrap the existing
-  `weather_report.py` / `traffic_trends.py` / `planned_events.py` controllers; emit
-  `weather.smartroute` / `traffic_trends.smartroute` / `planned_events.smartroute`.
-- [ ] Each publisher runs standalone (one process per Atsign), config-driven.
-- [ ] **Acceptance:** all 6 publishers push; a debug subscriber sees distinct decrypted records.
+### Phase 2 — Publishers (intersections + conditions feeds) ✅ DONE
+- [x] Reusable `AtPublisher` / `AtSubscriber` in `src/atsign/atsign_io.py`
+  (IV + fresh-session_id fixes baked in).
+- [x] Intersection publisher `atsign/publishers/intersection.py` — emits `LiveTrafficData`
+  (cycling density) per intersection role.
+- [x] Conditions feed publisher `atsign/publishers/feed.py` — reads the bundled CSVs and
+  publishes each row as `WeatherData` / `TrafficTrendsData` / `PlannedEventsData`
+  (the CSV read moves from the planner to the data source).
+- [x] Each publisher is a standalone, config-driven process (one per role atSign).
+- [x] **Acceptance MET:** all 6 publishers push; `scripts/debug_subscriber.py` (planner)
+  receives + decrypts + decodes every record into the right model (verified on the EE).
 
 ### Phase 2b — Policy plane (the trust model) — **a policy engine, not a flat allow-list**
 - [ ] Build the **Policy Manager** as a **policy engine** (`@route_policy`, own Atsign):
