@@ -10,6 +10,7 @@ proven in the spike:
      import, so the server would dedup identical-id notifications).
 """
 import threading
+import time
 import uuid
 from queue import Queue, Empty
 from typing import Callable
@@ -45,28 +46,42 @@ class AtPublisher:
 
 
 class AtSubscriber:
-    """Subscribes to a namespace/regex; calls on_record(from_atsign, key, value, raw)."""
+    """Subscribes to a namespace/regex; calls on_record(from_atsign, key, value, raw).
+
+    Resilient: the atsdk monitor can drop (lost heartbeats) and fail to self-recover
+    (`Bad file descriptor`). `start()` therefore loops — it recreates the AtClient and
+    restarts the monitor whenever it dies, so subscribers keep receiving indefinitely.
+    """
 
     def __init__(self, atsign: str, regex: str,
                  on_record: Callable[[str, str, str, dict], None],
                  root: str | None = None, verbose: bool = False):
         self.q: Queue = Queue()
-        self.atsign = AtSign(atsign)
-        self.client = AtClient(
-            self.atsign,
-            root_address=Address.from_string(root or roles.root()),
-            queue=self.q,
-            verbose=verbose,
-        )
+        self.atsign_str = atsign
         self.regex = regex
         self.on_record = on_record
+        self.root = root or roles.root()
+        self.verbose = verbose
         self._running = False
+        self.client: AtClient | None = None
 
     def start(self):
-        """Start the consumer thread, then block on the monitor."""
+        """Start one consumer thread, then (re)connect + monitor in a loop forever."""
         self._running = True
         threading.Thread(target=self._consume, daemon=True).start()
-        self.client.start_monitor(self.regex)  # blocks
+        while self._running:
+            try:
+                self.client = AtClient(
+                    AtSign(self.atsign_str),
+                    root_address=Address.from_string(self.root),
+                    queue=self.q,
+                    verbose=self.verbose,
+                )
+                self.client.start_monitor(self.regex)  # blocks until the monitor dies
+                print(f"[subscriber {self.atsign_str}] monitor ended; reconnecting in 3s", flush=True)
+            except Exception as e:
+                print(f"[subscriber {self.atsign_str}] monitor error: {e}; reconnecting in 3s", flush=True)
+            time.sleep(3)
 
     def _consume(self):
         while self._running:
@@ -74,12 +89,18 @@ class AtSubscriber:
                 ev = self.q.get(timeout=1.0)
             except Empty:
                 continue
-            self.client.handle_event(self.q, ev)  # decrypts -> re-enqueues DECRYPTED_*
-            if ev.event_type != AtEventType.DECRYPTED_UPDATE_NOTIFICATION:
+            client = self.client
+            if client is None:
                 continue
-            d = ev.event_data
-            key = d.get("key", "")
-            if roles.namespace() not in key:
-                continue
-            from_atsign = "@" + key.split("@")[-1] if "@" in key else d.get("from", "")
-            self.on_record(from_atsign, key, str(d.get("decryptedValue", "")), d)
+            try:
+                client.handle_event(self.q, ev)  # decrypts -> re-enqueues DECRYPTED_*
+                if ev.event_type != AtEventType.DECRYPTED_UPDATE_NOTIFICATION:
+                    continue
+                d = ev.event_data
+                key = d.get("key", "")
+                if roles.namespace() not in key:
+                    continue
+                from_atsign = "@" + key.split("@")[-1] if "@" in key else d.get("from", "")
+                self.on_record(from_atsign, key, str(d.get("decryptedValue", "")), d)
+            except Exception as e:
+                print(f"[subscriber {self.atsign_str}] consume error: {e}", flush=True)
