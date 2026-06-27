@@ -145,12 +145,16 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _atClient = AtClientManager.getInstance().atClient;
+    // Subscribe to the namespace (not 'route.smartroute'): the Python sender renders the
+    // notification key without the dot before the namespace, so a literal 'route.' regex
+    // wouldn't match. Filter for route records in the handler.
     _atClient.notificationService
-        .subscribe(regex: 'route.$kNamespace', shouldDecrypt: true)
+        .subscribe(regex: kNamespace, shouldDecrypt: true)
         .listen(_onRoute);
   }
 
   void _onRoute(AtNotification n) {
+    if (!n.key.contains('route')) return; // only route pushes
     final value = n.value;
     if (value == null) return;
     final d = jsonDecode(value) as Map<String, dynamic>;
