@@ -1,4 +1,6 @@
-# Spike: Python `atsdk` notify → monitor round-trip (Path B go/no-go)
+# Validation: Python `atsdk` notify → monitor round-trip + Python⇄Dart interop (Path B go/no-go)
+
+*This is the de-risking spike that proved Path B before the build — kept as the validation record.*
 
 **Goal:** de-risk Path B by proving the Beta Python SDK (`atsdk` / `at_python`) can
 **publish** (`notify`) and **subscribe** (`start_monitor`) a `LiveTrafficData`
