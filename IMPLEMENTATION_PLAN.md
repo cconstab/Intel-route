@@ -90,31 +90,33 @@ fallback / "act 1" of the demo.
 - [x] **Acceptance MET:** all 6 publishers push; `scripts/debug_subscriber.py` (planner)
   receives + decrypts + decodes every record into the right model (verified on the EE).
 
-### Phase 2b — Policy plane (the trust model) — **a policy engine, not a flat allow-list**
-- [ ] Build the **Policy Manager** as a **policy engine** (`@route_policy`, own Atsign):
-  answers *may `<atSign>` act as `<role>` for `<action>` (publish / request / view)?* — **default-deny**.
-- [ ] **Rule storage:** store policies as **encrypted records (atKeys) in the engine's own
-  Atsign store** by default — they sync automatically and need no external DB to run.
-  Put storage behind a `PolicyStore` interface with a second **database-backed**
-  implementation (NoPorts-style) for scale.
-- [ ] Rule model: `{subject Atsign, role, action, resource, allow}` — evaluated in order, default-deny.
-- [ ] **Policy Admin** (`@route_policy_admin`) writes/edits rules (CLI or small UI) into the store.
-- [ ] Expose evaluation as request/response (Dart `AtRpc` / equivalent request key in Python),
-  with a short-TTL decision cache on the planner.
-- [ ] **Acceptance:** planner authorizes a known publisher and **rejects an unknown one**;
-  adding a rule (atKey) takes effect live without restarting the planner; the same rules
-  work unchanged when swapped to the DB-backed store.
+### Phase 2b — Policy plane (the trust model) — **a policy engine** ✅ DONE
+- [x] `src/atsign/policy_engine.py` runs as the policy atSign (`@juliet` / `@route_policy`),
+  **default-deny**.
+- [x] **Rule storage:** `AtKeyPolicyStore` persists grants as **self atKeys in the engine's own
+  store** (`rule.<subject>.smartroute`). `PolicyStore` is an interface → a DB-backed impl drops
+  in later (NoPorts-style) with no caller change.
+- [x] The engine **publishes the authorization set** to the planner (`policy.smartroute`); the
+  planner enforces it. (Chose policy-distribution over per-record RPC for performance; the
+  enforcement point is the same, so RPC stays an option behind the interface.)
+- [x] **Acceptance MET:** with Broadway intentionally not granted, the planner **caches the
+  granted publishers and DENIES `@delta` (Broadway)**; re-publishing a new grant set updates
+  the planner live (no restart). Verified on the EE.
+- [ ] *(later)* `@route_policy_admin`-signed rule changes (demo seeds rules in the engine directly).
 
-### Phase 3 — Planner subscriber + `live_traffic.py` SWAP
-- [ ] Add an atsdk **subscriber** module in the planner: `start_monitor("smartroute")`,
-  drain queue → in-memory cache keyed by `(source-atsign, intersection/point)`.
-- [ ] On each inbound record, **check the Policy Manager** (cached, TTL) that the sender is
-  an authorized publisher; drop unauthorized records.
-- [ ] **SWAP** `controllers/live_traffic.py`: `fetch_route_status()` reads the cache
-  instead of `requests.get(...)`. Signature + `RouteStatusInterface` unchanged.
-- [ ] Map cache entries → `LiveTrafficData` exactly as before (graph untouched).
-- [ ] **Acceptance:** planner produces a route from pushed live-traffic with zero polling
-  and no `config.json` host list.
+### Phase 3 — Planner subscriber + `live_traffic.py` SWAP ✅ DONE
+- [x] `scripts/planner_subscriber.py` runs as the planner: `start_monitor("smartroute")`,
+  drains the queue, caches `live_traffic` (`src/atsign/cache.py`, keyed by source+intersection).
+- [x] Each inbound data record is **policy-checked** against the allow-set (from the policy
+  engine); unauthorized records are **dropped** (default-deny).
+- [x] **SWAP** `controllers/live_traffic.py`: `fetch_route_status()` reads the cache instead of
+  `requests.get(...)`. Class, `RouteStatusInterface`, and return type unchanged; original kept
+  as `live_traffic.py.intel-orig`.
+- [x] **Acceptance MET (data path):** the SWAP'd `LiveTrafficController.fetch_route_status()`
+  returns the subscription cache (`['Market St & 1st', '5th Ave & Mission']`) — zero polling,
+  no host list, graph untouched.
+- [ ] *(Phase 4/5)* full `plan_route` reroute end-to-end — needs intersection coords aligned to
+  GPX trackpoints + the OPTIMAL node re-enabled to trigger an actual route change.
 
 ### Phase 4 — Re-enable the static optimizers (OPTIMAL node)
 - [ ] Re-enable `STATIC_ROUTE_OPTIMIZER_STACK` in `route_planner.py` (Intel left it

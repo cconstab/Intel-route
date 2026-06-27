@@ -1,25 +1,26 @@
-# Copyright (C) 2026 Intel Corporation
+# Copyright (C) 2026 Intel Corporation / Atsign migration
 # SPDX-License-Identifier: Apache-2.0
+#
+# SWAP (Atsign migration): the ONLY changed controller. The original polled each
+# intersection's REST API (`requests.get(host + endpoint)`) from a static host
+# list in config.json. It now reads the in-memory cache that the planner's atSign
+# subscriber fills from encrypted, pushed `live_traffic.smartroute` notifications.
+#
+# The class name, the `RouteStatusInterface` contract, and `fetch_route_status()`'s
+# return type are unchanged, so the LangGraph graph and route_service are untouched.
+# Original preserved as live_traffic.py.intel-orig for diffing.
+from typing import List, Optional
 
-import requests
-from typing import Optional, List
-
-from config import (
-    IncidentStatus,
-    WeatherStatus,
-)
 from controllers.route_interface import RouteStatusInterface
-from schema import GeoCoordinates, LiveTrafficData
+from schema import LiveTrafficData
+from atsign import cache
 from utils.logging_config import get_logger
-from utils.helper import read_config_json
 
 logger = get_logger(__name__)
 
 
 class LiveTrafficController(RouteStatusInterface):
-    """
-    Controller for handling live traffic data from an external API.
-    """
+    """Live traffic, sourced from the subscription-fed cache (no polling, no host list)."""
 
     def __init__(
         self, latitude: Optional[float] = None, longitude: Optional[float] = None
@@ -37,97 +38,18 @@ class LiveTrafficController(RouteStatusInterface):
 
     @property
     def proximity_factor(self) -> float:
-        """
-        A float integer to help consider nearby latitude and longitudes as matching location coordinates.
-        Uses the configured COORDINATE_MATCHING_PRECISION value.
-        """
-        return 0.0  # Exact Match
+        """Exact coordinate match, as in the original."""
+        return 0.0
 
     def fetch_route_status(self) -> List[LiveTrafficData]:
         """
-        Fetch the live traffic data from the Scene Intelligence API.
+        Return live traffic for all intersections from the subscription cache.
 
-        Returns:
-            list[LiveTrafficData]: List of traffic data for all intersections.
+        Same shape the realtime LangGraph node already consumes; the records arrived
+        as encrypted notifications from intersection atSigns instead of REST polls.
         """
-        try:
-            logger.info("Fetching live traffic data ...")
-            # Construct the API URL
-
-            config = read_config_json()
-            api_endpoint = config.get("api_endpoint")
-            api_responses: list[dict] = []
-
-            if not api_endpoint:
-                raise ValueError("API endpoint not found in configuration.")
-
-            for api_host in config.get("api_hosts", []):
-                host = api_host.get("host")
-                if host:
-                    # Make the API request
-                    try:
-                        logger.debug(
-                            f"Sending request to Intersection API: {host}{api_endpoint}"
-                        )
-                        http_response = requests.get(f"{host}{api_endpoint}")
-                        http_response.raise_for_status()
-                        # Parse the response
-                        api_responses.append(http_response.json())
-                    except requests.RequestException as e:
-                        logger.error(
-                            f"Error fetching data from intersection at {host}: {e}"
-                        )
-
-            # List to store the final response as list of LiveTrafficData
-            live_traffic_intersection_records: list[LiveTrafficData] = []
-
-            # Look for intersections that match our current coordinates
-            for response_data in api_responses:
-                # Check if intersection data is present
-                intersection_data = response_data.get("data", {})
-                if not intersection_data:
-                    continue
-
-                # Get the intersection's coordinates and other details
-                logger.info(
-                    f"Processing intersection data: {intersection_data.get('intersection_name', 'Unknown')}"
-                )
-                intersection_lat = intersection_data.get("latitude")
-                intersection_lon = intersection_data.get("longitude")
-                intersection_name = intersection_data.get(
-                    "intersection_name", "Unknown Intersection"
-                )
-                intersection_data_timestamp = intersection_data.get("timestamp", "")
-                traffic_density = intersection_data.get("total_density", 0)
-
-                # Get weather and incident status if available
-                weather_status = response_data.get("weather_data", {}).get(
-                    "short_forecast", WeatherStatus.CLEAR
-                )
-                incident_status = response_data.get("incident", {}).get(
-                    "incident_type", IncidentStatus.CLEAR
-                )
-
-                # Create and return the LiveTrafficData
-                live_traffic_intersection_records.append(
-                    LiveTrafficData(
-                        location_coordinates=GeoCoordinates(
-                            latitude=intersection_lat,
-                            longitude=intersection_lon,
-                        ),
-                        intersection_name=intersection_name,
-                        timestamp=intersection_data_timestamp,
-                        traffic_density=traffic_density,
-                        weather_status=WeatherStatus(weather_status),
-                        incident_status=IncidentStatus(incident_status),
-                    )
-                )
-
-            return live_traffic_intersection_records
-
-        except Exception as e:
-            import traceback
-
-            traceback.print_exc()
-            logger.error(f"Error fetching live traffic data: {e}")
-            return []
+        records = cache.get_live_traffic()
+        logger.info(
+            f"Live traffic from subscription cache: {len(records)} intersection(s)"
+        )
+        return records
