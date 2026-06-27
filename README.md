@@ -100,6 +100,9 @@ python scripts/onboard_all_ee.py
 
 # 4. Run the live demo (policy -> pushed reroute -> commuter alert + operator status)
 bash scripts/run_demo.sh
+
+# 5. (finale) policy-gated dynamic onboarding — a new intersection joins live
+python scripts/onboarding_finale.py
 ```
 
 Individual pieces: `python -m atsign.policy_engine`, `python -m atsign.publishers.feed

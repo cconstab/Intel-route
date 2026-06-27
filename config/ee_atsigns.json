@@ -7,6 +7,7 @@
     "intxn_market_st":     { "ee": "@bravo",   "vanity": "@intxn_market_st" },
     "intxn_5th_ave":       { "ee": "@charlie", "vanity": "@intxn_5th_ave" },
     "intxn_broadway":      { "ee": "@delta",   "vanity": "@intxn_broadway" },
+    "intxn_downtown":      { "ee": "@lima",    "vanity": "@intxn_downtown" },
     "weather_feed":        { "ee": "@echo",    "vanity": "@weather_feed" },
     "traffic_trends_feed": { "ee": "@foxtrot", "vanity": "@traffic_trends_feed" },
     "events_feed":         { "ee": "@golf",    "vanity": "@events_feed" },

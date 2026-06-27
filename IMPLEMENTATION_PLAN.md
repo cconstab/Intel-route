@@ -171,11 +171,14 @@ fallback / "act 1" of the demo.
   commuter alert + operator status). **Verified end-to-end on the EE.**
 - [ ] *(optional)* Path A "act 1" contrast + add-an-intersection-live finale.
 
-### Phase 9 — Hardening & extensibility
-- [ ] Enforce **Policy-Manager decisions** on every publish / request / view (cache + TTL).
-- [ ] Demonstrate **policy-gated** dynamic onboarding: a new `@intxn_*` is rejected until
-  the Policy Admin authorizes it, then joins live with no planner change.
-- [ ] TTLs on all records; reconnect/idempotency review.
+### Phase 9 — Hardening & extensibility (high-value slice ✅)
+- [x] **Record TTLs:** `cache.py` entries expire (live 60s, conditions 300s) — stale/replayed
+  data drops out so the planner reasons over "now". Verified (fresh visible, 120s-old purged).
+- [x] **Policy-gated dynamic onboarding demo:** `scripts/onboarding_finale.py` — a new
+  intersection (`intxn_downtown` / @lima) is **DENIED** by default-deny, the Policy Admin
+  authorizes it, and it **joins the live network with no restart, no config edit**. Verified.
+- [ ] *(pilot)* extend policy enforcement to commuter requests + operator viewing; idempotency
+  / reconnect-under-failure review.
 
 ### Mandatory deliverables (per Atsign implementation rules)
 - [x] `ATPLATFORM_GUIDELINES.md` (platform SDK reference — all sections).
