@@ -13,6 +13,9 @@ without Gradio installed. Run the full UI with:  python -m atsign.operator_conso
 import json
 import threading
 
+import folium
+from branca.element import Figure
+
 from atsign import roles, wire
 from atsign.atsign_io import AtSubscriber
 from utils.map_creator import MapCreator
@@ -72,15 +75,43 @@ def start_subscriber():
     return me
 
 
+_MAP_HEIGHT = 660
+_last_map_key = None
+_last_map_html = ""
+
+
 def render_map_html() -> str:
-    """Render the current route on a Folium map (reuses Intel's MapCreator)."""
+    """Render the current route on a tall Folium map that fits the whole route.
+
+    Cached by route signature: when the route hasn't changed the SAME html string is
+    returned, so the Gradio refresh doesn't reload/resize the map (no flicker, view
+    stays put). Reuses Intel's MapCreator for the styled route line.
+    """
+    global _last_map_key, _last_map_html
     _, points = STATE.snapshot()
     if not points:
-        return "<div style='padding:40px;text-align:center'>Waiting for a route from the planner…</div>"
-    center_lat, center_lon, zoom = _map.calculate_map_center_and_zoom(points)
-    m = _map.create_base_map(center_lat, center_lon, zoom)
+        return (f"<div style='height:{_MAP_HEIGHT}px;display:flex;align-items:center;"
+                "justify-content:center;color:#666;font-size:18px'>"
+                "Waiting for a route from the planner…</div>")
+
+    key = (len(points), tuple(points[0]), tuple(points[-1]))
+    if key == _last_map_key:
+        return _last_map_html  # unchanged -> identical html -> no map reload
+
+    lats = [p[0] for p in points]
+    lons = [p[1] for p in points]
+    fig = Figure(height=f"{_MAP_HEIGHT}px")
+    m = folium.Map(location=[sum(lats) / len(lats), sum(lons) / len(lons)],
+                   zoom_start=10, tiles="OpenStreetMap")
     _map.add_route_line(m, points, "#13B513", "Optimal route (live, pushed)")
-    return m._repr_html_()
+    folium.Marker(points[0], tooltip="Start", icon=folium.Icon(color="blue")).add_to(m)
+    folium.Marker(points[-1], tooltip="Destination", icon=folium.Icon(color="red")).add_to(m)
+    m.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])  # show the whole route
+    fig.add_child(m)
+
+    _last_map_key = key
+    _last_map_html = fig._repr_html_()
+    return _last_map_html
 
 
 def status_markdown() -> str:
@@ -101,11 +132,10 @@ def status_markdown() -> str:
 def build_ui():
     import gradio as gr  # guarded — only needed to actually launch the console
 
-    with gr.Blocks(title="Route Operator Console") as app:
+    with gr.Blocks(title="Route Operator Console", fill_width=True) as app:
         gr.Markdown("# Route Operator Console — control room (live via atSign)")
-        with gr.Row():
-            status = gr.Markdown(status_markdown())
-            map_html = gr.HTML(render_map_html())
+        status = gr.Markdown(status_markdown())
+        map_html = gr.HTML(render_map_html())  # full width, tall map below the status
         gr.Timer(3).tick(lambda: (status_markdown(), render_map_html()),
                          outputs=[status, map_html])
     return app
