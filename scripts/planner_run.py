@@ -28,7 +28,7 @@ from config import DEFAULT_LOCATIONS, IGNORED_ROUTES, GPX_DIR, WeatherStatus, In
 from schema import GeoCoordinates, LiveTrafficData  # noqa: E402
 from agents.route_planner import RoutePlanner  # noqa: E402
 from utils.gpx_parser import MapDataParser  # noqa: E402
-from atsign import roles, wire, cache  # noqa: E402
+from atsign import roles, wire, cache, messages  # noqa: E402
 from atsign.atsign_io import AtPublisher, AtSubscriber  # noqa: E402
 
 ALLOW: set = set()
@@ -113,13 +113,37 @@ def main():
     result = rp.update_optimal_route_realtime(state)
     new_route = result["optimal_route"]["route_name"]
     lt = result.get("live_traffic", {})
+    rerouted = bool(new_route) and new_route != shortest
+    chosen = new_route or shortest
+    chosen_dist = result["optimal_route"].get("distance", dist)
+    reason = (
+        f"Severe congestion at {lt.get('intersection_name')} "
+        f"(density {lt.get('traffic_density')}) — rerouted"
+        if rerouted else "No incidents on the optimal route"
+    )
 
     print("\n==================== RESULT ====================")
     print(f"  shortest direct route : {shortest}")
     print(f"  realtime optimal route: {new_route}")
-    print(f"  REROUTED              : {new_route != shortest and bool(new_route)}")
+    print(f"  REROUTED              : {rerouted}")
     print(f"  triggered by          : {lt.get('intersection_name')} density={lt.get('traffic_density')}")
-    print("  (data arrived as an encrypted push; LiveTrafficController read the cache, not a URL)")
+
+    # Phase 5: PUSH the chosen route to the commuter app and status to the operator console.
+    planner_pub = AtPublisher(me)
+    route_push = messages.RoutePush(
+        route_name=chosen, distance_km=chosen_dist, reason=reason,
+        rerouted=rerouted, points=messages.route_points(chosen),
+    )
+    planner_pub.notify(roles.atsign_for("commuter01"), "route", route_push.model_dump_json())
+    status_push = messages.StatusPush(
+        optimal_route=chosen, distance_km=chosen_dist, reason=reason, rerouted=rerouted,
+        agent_status="Active - rerouted" if rerouted else "Active - monitoring",
+        intersections=[{"name": lt.get("intersection_name"), "density": lt.get("traffic_density")}] if lt else [],
+    )
+    planner_pub.notify(roles.atsign_for("operator"), "status", status_push.model_dump_json())
+    print(f"  PUSHED route -> {roles.atsign_for('commuter01')} | status -> {roles.atsign_for('operator')}")
+    print("  (reroute computed from an encrypted push; route pushed back, no polling, no open ports)")
+    time.sleep(2)  # let pushes flush
     os._exit(0)
 
 

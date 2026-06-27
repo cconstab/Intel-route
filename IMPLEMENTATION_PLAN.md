@@ -132,12 +132,14 @@ fallback / "act 1" of the demo.
 - [ ] *(optional polish)* force a static-path (weather/event) reroute — wired and
   cache-reading; triggering is data-dependent on feed coords vs route trackpoints.
 
-### Phase 5 — Planner pushes route + reroute alerts
-- [ ] Planner `notify()`s the optimal route geometry (`RoutePoints`) + reason to each
-  subscribed commuter Atsign (`route.smartroute`) and to `@route_operator` (`status.smartroute`).
-- [ ] Handle the request side: commuter app `notify`/`put` start+destination →
-  planner reacts (Phase 7 wires the client).
-- [ ] **Acceptance:** changing conditions pushes an updated route to subscribers in real time.
+### Phase 5 — Planner pushes route + reroute alerts ✅ DONE
+- [x] `atsign/messages.py` — `RoutePush` / `StatusPush` models + `route_points()` (downsampled geometry).
+- [x] Planner `notify()`s the optimal route + reason to the commuter (`route.smartroute`) and
+  status to the operator (`status.smartroute`) — in `scripts/planner_run.py`.
+- [x] **Acceptance MET:** a reroute computed from pushed data is pushed back —
+  `scripts/commuter_receiver.py` got a 🚨 REROUTE ALERT (berkeley-sanbruno, 123 map points),
+  `scripts/operator_receiver.py` got the matching status. Verified on the EE.
+- [ ] *(Phase 7)* request side: the Flutter app sends start/destination to the planner.
 
 ### Phase 6 — Operator Console (reuse Gradio)
 - [ ] Run Intel's `main.py` Gradio UI as `@route_operator`; replace its internal queue
