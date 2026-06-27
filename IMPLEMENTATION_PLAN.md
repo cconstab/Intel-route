@@ -160,9 +160,11 @@ fallback / "act 1" of the demo.
   polyline + start/end markers + a reroute alert banner.
 - [x] Sends start/destination request to the planner (`request.smartroute`).
 - [x] **`flutter analyze`: No issues found** (compiles clean).
-- [ ] *(needs a device/simulator)* run + point at the EE (custom root domain
-  `vip.ve.atsign.zone`) + add platform network permissions. Protocol already proven by the
-  interop spike, so this is GUI wiring only.
+- [x] Platform permissions added: macOS entitlements (network client/server + user-selected
+  file read-only/read-write, Debug + Release), iOS `NSLocalNetworkUsageDescription` + Bonjour,
+  Android INTERNET + storage. (Root server is now picked at sign-in.)
+- [ ] *(needs a device/simulator)* `flutter run` against the EE (pick `vip.ve.atsign.zone:64`
+  + load a commuter's `.atKeys`). Protocol already proven by the interop spike.
 
 ### Phase 8 — Packaging, deploy, demo ✅ DONE
 - [x] `deploy/Dockerfile` + `deploy/compose.yaml` — one container per atSign role
