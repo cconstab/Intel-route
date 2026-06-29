@@ -8,7 +8,8 @@ messaging, and a Flutter commuter app + reused-Gradio operator console are added
 **Docs:** [PRD.md](PRD.md) (non-technical) · [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) ·
 [atsign-migration-assessment.md](atsign-migration-assessment.md) ·
 [path-comparison-and-recommendation.md](path-comparison-and-recommendation.md) ·
-[blueprints/](blueprints/) · platform reference: [ATPLATFORM_GUIDELINES.md](ATPLATFORM_GUIDELINES.md).
+[blueprints/](blueprints/) · platform reference: [ATPLATFORM_GUIDELINES.md](ATPLATFORM_GUIDELINES.md) ·
+**production:** [GETTING_STARTED_PRODUCTION.md](GETTING_STARTED_PRODUCTION.md).
 
 > For the Atsign Platform SDK reference (patterns, init, comms), see
 > `ATPLATFORM_GUIDELINES.md`. This file is the **project-specific** reference.
