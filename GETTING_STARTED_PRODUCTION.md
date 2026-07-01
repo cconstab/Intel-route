@@ -107,9 +107,14 @@ with only that atSign's `.atKeys` present — still zero inbound ports. See
 
 ```bash
 cd dart_client
+export ATSIGN_PROFILE=vanity     # <-- REQUIRED: makes the Dart tools use the vanity atSigns
 dart run bin/policy_admin.dart --atsign @your_policy_admin_atsign --root-domain root.atsign.org
-# -> http://127.0.0.1:8090  (toggle who's authorized; pushed to the policy engine)
+# -> http://127.0.0.1:8090  (startup line should read: profile=vanity, engine=@your_policy_atsign)
 ```
+
+> The Dart tools honor `ATSIGN_PROFILE` too. **Without it they default to `ee`** and will
+> target the local test engine (`@juliet`) — which on the production root comes back
+> `undelivered`. Always export `ATSIGN_PROFILE=vanity` for production.
 
 ## 7. Commuter Flutter app
 
@@ -124,6 +129,7 @@ routes and reroute alerts.
 
 ```bash
 cd dart_client
+export ATSIGN_PROFILE=vanity     # --to defaults to the vanity planner from config
 dart run bin/change_route.dart --atsign @your_intersection_1 --root-domain root.atsign.org --density 30
 ```
 The operator console map should reroute within ~8s; the commuter app shows a 🚨 reroute

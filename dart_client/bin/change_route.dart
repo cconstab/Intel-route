@@ -16,7 +16,7 @@ import 'package:at_cli_commons/at_cli_commons.dart';
 
 Future<void> main(List<String> args) async {
   final parser = CLIBase.createArgsParser(namespace: 'smartroute')
-    ..addOption('to', defaultsTo: '@alpha', help: 'planner atSign')
+    ..addOption('to', help: 'planner atSign (default: planner for ATSIGN_PROFILE from config)')
     ..addOption('lat', defaultsTo: '37.54812', help: 'incident latitude (a trackpoint on the shortest route)')
     ..addOption('lon', defaultsTo: '-122.0241', help: 'incident longitude')
     ..addOption('density', defaultsTo: '30', help: 'vehicle density: >10 reroutes, <=10 clears')
@@ -26,8 +26,15 @@ Future<void> main(List<String> args) async {
   final atClient = cli.atClient;
   final me = atClient.getCurrentAtSign()!;
   final a = parser.parse(args);
-  final to = a['to'] as String;
   final density = int.parse(a['density'] as String);
+
+  // Default the planner atSign from config for the active profile ('ee' or 'vanity').
+  final profile = Platform.environment['ATSIGN_PROFILE'] ?? 'ee';
+  final cfg = jsonDecode(await File.fromUri(
+          Platform.script.resolve('../../config/ee_atsigns.json'))
+      .readAsString()) as Map<String, dynamic>;
+  final to = (a['to'] as String?) ??
+      ((cfg['roles'] as Map)['planner'] as Map)[profile] as String;
 
   final key = AtKey()
     ..key = 'live_traffic'

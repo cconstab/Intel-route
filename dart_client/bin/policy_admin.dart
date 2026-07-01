@@ -23,15 +23,19 @@ late String engineAtSign;  // @juliet (policy engine)
 final Map<String, String> roleToAtSign = {}; // role -> atSign (publishers only)
 final Set<String> granted = {};               // currently-authorized atSigns
 
+// Which config column to use: 'ee' (local test env, default) or 'vanity' (production).
+// Matches the Python services' ATSIGN_PROFILE env var.
+final String profile = Platform.environment['ATSIGN_PROFILE'] ?? 'ee';
+
 Future<void> _loadRoles() async {
   final cfgUri = Platform.script.resolve('../../config/ee_atsigns.json');
   final cfg = jsonDecode(await File.fromUri(cfgUri).readAsString()) as Map<String, dynamic>;
   final roles = cfg['roles'] as Map<String, dynamic>;
-  engineAtSign = (roles['policy'] as Map)['ee'] as String;
+  engineAtSign = (roles['policy'] as Map)[profile] as String;
   for (final entry in roles.entries) {
     final role = entry.key;
     if (role.startsWith('intxn_') || role.endsWith('_feed')) {
-      roleToAtSign[role] = (entry.value as Map)['ee'] as String;
+      roleToAtSign[role] = (entry.value as Map)[profile] as String;
     }
   }
   granted.addAll(roleToAtSign.values); // default: all publishers granted
@@ -96,7 +100,8 @@ Future<void> main(List<String> args) async {
   await _pushGrants(); // publish initial state
 
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, kPort);
-  stdout.writeln('[policy-admin] $me serving http://127.0.0.1:$kPort  (engine=$engineAtSign)');
+  stdout.writeln('[policy-admin] $me serving http://127.0.0.1:$kPort  '
+      '(profile=$profile, engine=$engineAtSign)');
   await for (final req in server) {
     if (req.uri.path == '/toggle') {
       final role = req.uri.queryParameters['role'];
