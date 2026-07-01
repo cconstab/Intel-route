@@ -27,12 +27,21 @@ that differ from the EE.
 
 ## 1. Prerequisites
 
-- Python 3.13 venv with deps (same as dev): `atsdk pydantic langgraph==1.0.9 gpxpy folium gradio`
-- Dart ≥ 3.5 / Flutter ≥ 3.41 (for the commuter app, the policy admin, and route tooling)
-- The Atsign onboarding CLI:
+- **Python 3.13** — create the venv and install deps (one time, from the repo root):
   ```bash
-  dart pub global activate at_onboarding_cli   # provides `at_activate`
+  cd /path/to/Intel-route
+  python3 -m venv .venv
+  . .venv/bin/activate
+  pip install atsdk pydantic "langgraph==1.0.9" gpxpy "folium==0.14.0" "gradio>=6.7.0"
   ```
+- **Dart ≥ 3.5 / Flutter ≥ 3.41** (for the commuter app, the policy admin, and route tooling).
+- **The Atsign onboarding CLI** (provides `at_activate`):
+  ```bash
+  dart pub global activate at_onboarding_cli
+  # ensure it's on PATH:  export PATH="$PATH:$HOME/.pub-cache/bin"
+  ```
+
+> In later steps `. .venv/bin/activate` reuses the venv created here.
 
 ## 2. Obtain your atSigns
 
