@@ -37,10 +37,26 @@ def main():
         traffic_density=30, traffic_description="severe congestion (injected)",
         weather_status=WeatherStatus.CLEAR, incident_status=IncidentStatus.CROWDING,
     )
-    AtPublisher(roles.atsign_for("intxn_market_st")).notify(
-        roles.atsign_for("planner"), "live_traffic", wire.encode(rec))
-    print(f"💥 incident injected on {shortest} at ({tp['lat']}, {tp['lon']}), density=30")
-    print("   the planner service will reroute within ~8s; clears after ~60s (TTL).")
+    # Re-send a few times with a short delay. A one-shot Python notify can be dropped
+    # by the receiver the FIRST time it sees this sender (atsdk shared-key sync lag ->
+    # "NoneType while decrypting"); the long-running publishers survive it only because
+    # they retry every cycle. Re-sending is idempotent — the planner caches by
+    # (source, intersection_name), so repeats just refresh the same incident.
+    payload = wire.encode(rec)
+    frm, to = roles.atsign_for("intxn_market_st"), roles.atsign_for("planner")
+    pub = AtPublisher(frm)  # one client, reused across attempts (keeps the shared key warm)
+    attempts = int(os.environ.get("INCIDENT_ATTEMPTS", "3"))
+    print(f"💥 injecting incident on {shortest} at ({tp['lat']}, {tp['lon']}), density=30")
+    print(f"   {frm} -> {to}  (sending {attempts}x to beat first-notification sync lag)")
+    for i in range(1, attempts + 1):
+        try:
+            notify_id = pub.notify(to, "live_traffic", payload)
+            print(f"   [{i}/{attempts}] sent (notify id: {notify_id})")
+        except Exception as e:
+            print(f"   [{i}/{attempts}] send error: {e}")
+        if i < attempts:
+            time.sleep(3)
+    print("   planner reroutes within ~8s of a successful decrypt; clears after ~60s (TTL).")
 
 
 if __name__ == "__main__":
