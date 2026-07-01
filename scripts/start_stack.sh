@@ -7,7 +7,11 @@ set +e
 APP="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="${ATSIGN_VENV:-$APP/.venv}"
 SRC="$APP/smart-route-planning-agent/src"
-export HOME="${HOME_OVERRIDE:-/tmp/eehome}"
+# EE keystore lives in /tmp/eehome; production (vanity) uses the real ~/.atsign/keys.
+# Only override HOME for the ee profile so vanity finds the real @intc_* keys.
+if [ "${ATSIGN_PROFILE:-ee}" = "ee" ]; then
+  export HOME="${HOME_OVERRIDE:-/tmp/eehome}"
+fi
 source "$VENV/bin/activate"
 export PYTHONPATH="$SRC"
 LOG=/tmp/stack; mkdir -p "$LOG"; : > "$LOG/pids"
