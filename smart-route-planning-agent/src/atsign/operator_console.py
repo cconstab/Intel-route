@@ -12,6 +12,12 @@ without Gradio installed. Run the full UI with:  python -m atsign.operator_conso
 """
 import json
 import threading
+import warnings
+
+# Gradio polls its queue endpoint ~1/s; each poll touches a Starlette symbol that
+# now emits a DeprecationWarning (Gradio/Starlette version mismatch, not our code).
+# Silence just that message so the console stays readable.
+warnings.filterwarnings("ignore", message=r".*HTTP_422_UNPROCESSABLE_ENTITY.*")
 
 import folium
 from branca.element import Figure
