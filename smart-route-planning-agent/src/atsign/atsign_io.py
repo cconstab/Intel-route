@@ -19,7 +19,9 @@ from at_client import AtClient
 from at_client.common import AtSign
 from at_client.common.keys import SharedKey
 from at_client.connections import Address
+from at_client.connections.atmonitorconnection import AtMonitorConnection
 from at_client.connections.notification.atevents import AtEventType
+from at_client.util.authutil import AuthUtil
 from at_client.util.encryptionutil import EncryptionUtil
 
 from atsign import roles
@@ -64,6 +66,28 @@ class AtSubscriber:
         self.verbose = verbose
         self._running = False
         self.client: AtClient | None = None
+        # Highest notification epoch (ms) we've processed. On reconnect we resume the
+        # monitor from here (monitor:<epoch> <regex>) instead of the SDK default of 0 —
+        # so a notification that arrived during the disconnect window is replayed exactly
+        # once, and we don't re-stream the entire retained backlog (which caused flapping).
+        self._last_epoch = 0
+
+    def _start_monitor_resuming(self):
+        """Build the monitor connection with our resume position, then run it (blocks).
+
+        Mirrors AtClient.start_monitor's own construct+connect+auth, but seeds
+        `last_received_time` first so the monitor verb resumes from where we left off.
+        """
+        client = self.client
+        mc = AtMonitorConnection(
+            queue=self.q, atsign=client.atsign, address=client.secondary_address,
+            verbose=self.verbose, regex=self.regex,
+        )
+        mc.last_received_time = self._last_epoch  # 0 on first connect; last-seen epoch after
+        mc.connect()
+        AuthUtil.authenticate_with_pkam(mc, client.atsign, client.keys)
+        client.monitor_connection = mc
+        client.start_monitor(self.regex)  # sees monitor_connection != None -> just runs it; blocks
 
     def start(self):
         """Start one consumer thread, then (re)connect + monitor in a loop forever."""
@@ -77,7 +101,9 @@ class AtSubscriber:
                     queue=self.q,
                     verbose=self.verbose,
                 )
-                self.client.start_monitor(self.regex)  # blocks until the monitor dies
+                resume = f" (resuming from epoch {self._last_epoch})" if self._last_epoch else ""
+                print(f"[subscriber {self.atsign_str}] monitor starting{resume}", flush=True)
+                self._start_monitor_resuming()  # blocks until the monitor dies
                 print(f"[subscriber {self.atsign_str}] monitor ended; reconnecting in 3s", flush=True)
             except Exception as e:
                 print(f"[subscriber {self.atsign_str}] monitor error: {e}; reconnecting in 3s", flush=True)
@@ -92,6 +118,15 @@ class AtSubscriber:
             client = self.client
             if client is None:
                 continue
+            # Track the newest epoch we've seen so a reconnect resumes from here.
+            # The raw UPDATE/DELETE notification carries epochMillis (the decrypted
+            # re-enqueued event may not), so capture it before handling.
+            try:
+                em = ev.event_data.get("epochMillis") if isinstance(ev.event_data, dict) else None
+                if em is not None and int(em) > self._last_epoch:
+                    self._last_epoch = int(em)
+            except (ValueError, TypeError):
+                pass
             try:
                 client.handle_event(self.q, ev)  # decrypts -> re-enqueues DECRYPTED_*
                 if ev.event_type != AtEventType.DECRYPTED_UPDATE_NOTIFICATION:
