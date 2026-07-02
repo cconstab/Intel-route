@@ -12,8 +12,13 @@ data. This makes the Python SDK match the Dart reference `at_client`:
 
 - **Shared keys:** `put` always generates a random 16-byte IV and stores it as
   `ivNonce` in the key metadata (serialized into the update command).
-- **Self keys:** keep the legacy zero IV unless the caller set `ivNonce` — Dart does
-  not auto-generate for self keys.
+- **Self keys:** also get a random IV (stored as `ivNonce`). NOTE: this goes one step
+  *beyond* the current Dart SDK, whose `SelfKeyEncryption` still uses the zero IV — the
+  same IV-reuse weakness (reported separately for Dart). It is interop-safe: `get`
+  falls back to the zero IV when `ivNonce` is absent, and Dart's self *decrypt* already
+  honors `ivNonce` when present.
+- **UpdateVerbBuilder:** fixed to carry `iv_nonce` — `set_metadata`/`_build_metadata_str`
+  silently dropped it, so a self-key `ivNonce` would never have been persisted.
 - **Get:** fetch metadata via `llookup:all` / `lookup:all`, use `ivNonce` when present,
   else fall back to the legacy zero IV — so existing data (and Dart-written legacy
   data) still decrypts.
