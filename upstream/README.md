@@ -13,6 +13,8 @@ Upstream repo: https://github.com/atsign-foundation/at_python
 | 3 | Shared-key notifications never detected (`to_string` not called) | **PR** `fix/shared-key-notification-detection` | [prs/pr-2](prs/pr-2-shared-key-notification-detection.md) |
 | 7 | Shared-key decrypt error hides the real exception (`- e`) | **PR** `fix/decrypt-error-detail` | [prs/pr-3](prs/pr-3-decrypt-error-detail.md) |
 | 8 (primary) | `disconnect()` leaves `_connected=True` on failed close → monitor never recovers | **PR** `fix/disconnect-resets-connected` | [prs/pr-4](prs/pr-4-disconnect-resets-connected.md) |
+| — | Stored keys (put/get) use a static zero IV — random IV to match Dart | **PR** `fix/put-get-random-iv` (rel. #64) | [prs/pr-5](prs/pr-5-put-get-random-iv.md) · [spec](atsdk-iv-spec.md) · [interop](interop/) |
+| 9 | Verb builders drop the namespace for self/public keys (cross-SDK naming mismatch) | **Issue** | [issues/issue-9](issues/issue-9-verbbuilder-drops-namespace-self-public.md) |
 | 4 | First-contact notification dropped on decrypt | **Issue** | [issues/issue-4](issues/issue-4-first-contact-decrypt-drop.md) |
 | 5 | Monitor can't resume after client recreation | **Issue** | [issues/issue-5](issues/issue-5-monitor-resume-on-reconnect.md) |
 | 6 | Long-lived client "Failed to decrypt shared_key…" after a while | **Issue** (unblocked by PR #7) | [issues/issue-6](issues/issue-6-long-lived-shared-key-decrypt-failure.md) |
@@ -22,6 +24,8 @@ Upstream repo: https://github.com/atsign-foundation/at_python
 - Runnable, network-free repros: [repro/](repro/)
 
 ## Status
-All 4 PR branches pushed to `atsign-foundation/at_python`, each lint-clean (CI flake8
-hard gate) and test-backed (network-free `test/*_test.py`). Open the PRs at:
+All 5 PR branches pushed to `atsign-foundation/at_python`, each lint-clean (CI flake8
+hard gate) and test-backed (network-free `test/*_test.py`). The random-IV PR
+(`fix/put-get-random-iv`) is additionally verified cross-SDK against the Dart reference
+`at_client` (see [interop/](interop/)). Open the PRs at:
 `https://github.com/atsign-foundation/at_python/pull/new/<branch>`.
