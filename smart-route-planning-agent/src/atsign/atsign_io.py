@@ -71,6 +71,12 @@ class AtSubscriber:
         # so a notification that arrived during the disconnect window is replayed exactly
         # once, and we don't re-stream the entire retained backlog (which caused flapping).
         self._last_epoch = 0
+        # First notification from a never-seen sender can arrive before that sender's
+        # shared key has propagated to us; the SDK then fails to decrypt (NoneType) and
+        # silently drops it. We pre-resolve the shared key with a short retry so the
+        # first record from a new publisher isn't lost (no "send it twice to wake it up").
+        self._key_retries = 4
+        self._key_backoff_s = 1.5
 
     def _start_monitor_resuming(self):
         """Build the monitor connection with our resume position, then run it (blocks).
@@ -109,6 +115,44 @@ class AtSubscriber:
                 print(f"[subscriber {self.atsign_str}] monitor error: {e}; reconnecting in 3s", flush=True)
             time.sleep(3)
 
+    def _ensure_shared_key(self, client, ev):
+        """Resolve (and cache) the sender's shared key, retrying while it propagates.
+
+        handle_event fetches this key via `get_encryption_key_shared_by_other`; if the
+        sender's shared key isn't on our server yet (first contact), it raises and the
+        SDK swallows the notification. Pre-resolving here populates `client.keys` so the
+        subsequent handle_event decrypts on its first attempt.
+        """
+        try:
+            key = ev.event_data.get("key", "")
+        except AttributeError:
+            return
+        if roles.namespace() not in key:
+            return
+        try:
+            sk = SharedKey.from_string(key=key)
+        except Exception:
+            return  # not a shared-key notification; nothing to pre-resolve
+        # Already cached? then there's nothing to do.
+        try:
+            if client.keys.get(sk.get_shared_shared_key_name()) is not None:
+                return
+        except Exception:
+            pass
+        for attempt in range(self._key_retries):
+            try:
+                client.get_encryption_key_shared_by_other(sk)  # caches into client.keys
+                if attempt:
+                    print(f"[subscriber {self.atsign_str}] shared key for {key} "
+                          f"resolved on retry {attempt}", flush=True)
+                return
+            except Exception as e:
+                if attempt == self._key_retries - 1:
+                    print(f"[subscriber {self.atsign_str}] shared key for {key} "
+                          f"still unavailable after {self._key_retries} tries: {e}", flush=True)
+                    return
+                time.sleep(self._key_backoff_s)
+
     def _consume(self):
         while self._running:
             try:
@@ -127,6 +171,10 @@ class AtSubscriber:
                     self._last_epoch = int(em)
             except (ValueError, TypeError):
                 pass
+            # Pre-warm the sender's shared key so handle_event decrypts first-try
+            # (avoids the swallowed NoneType decrypt drop on a new sender's first record).
+            if ev.event_type == AtEventType.UPDATE_NOTIFICATION:
+                self._ensure_shared_key(client, ev)
             try:
                 client.handle_event(self.q, ev)  # decrypts -> re-enqueues DECRYPTED_*
                 if ev.event_type != AtEventType.DECRYPTED_UPDATE_NOTIFICATION:
