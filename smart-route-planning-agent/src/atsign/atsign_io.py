@@ -28,23 +28,49 @@ from atsign import roles
 
 
 class AtPublisher:
-    """Publishes encrypted records (notifications) to another atSign."""
+    """Publishes encrypted records (notifications) to another atSign.
+
+    Resilient: a long-lived publisher's connection/key-cache can go bad after a while
+    ("Failed to decrypt shared_key..." on notify). On a notify failure we rebuild the
+    AtClient once (fresh connection + key cache) and retry, so the planner keeps
+    pushing instead of erroring every cycle until restart.
+    """
 
     def __init__(self, atsign: str, root: str | None = None, verbose: bool = False):
         self.atsign = AtSign(atsign)
-        self.client = AtClient(
+        self._root = root or roles.root()
+        self._verbose = verbose
+        self.client = self._new_client()
+
+    def _new_client(self) -> AtClient:
+        return AtClient(
             self.atsign,
-            root_address=Address.from_string(root or roles.root()),
-            verbose=verbose,
+            root_address=Address.from_string(self._root),
+            verbose=self._verbose,
         )
 
     def notify(self, to: str, key_name: str, value: str,
                namespace: str | None = None, ttl_ms: int = 60_000) -> str:
-        sk = SharedKey(key_name, self.atsign, AtSign(to))
-        sk.set_namespace(namespace or roles.namespace())
-        sk.set_time_to_live(ttl_ms)
-        sk.metadata.iv_nonce = EncryptionUtil.generate_iv_nonce()   # fix #1
-        return self.client.notify(sk, value, session_id=str(uuid.uuid4()))  # fix #2
+        last: Exception | None = None
+        for attempt in range(2):
+            try:
+                sk = SharedKey(key_name, self.atsign, AtSign(to))
+                sk.set_namespace(namespace or roles.namespace())
+                sk.set_time_to_live(ttl_ms)
+                sk.metadata.iv_nonce = EncryptionUtil.generate_iv_nonce()   # fix #1
+                return self.client.notify(sk, value, session_id=str(uuid.uuid4()))  # fix #2
+            except Exception as e:
+                last = e
+                if attempt == 0:
+                    print(f"[publisher {self.atsign}] notify to {to} failed ({e}); "
+                          f"rebuilding client and retrying", flush=True)
+                    time.sleep(1)  # let the old connection settle before a fresh one
+                    try:
+                        self.client = self._new_client()
+                    except Exception as ce:
+                        print(f"[publisher {self.atsign}] reconnect failed: {ce}", flush=True)
+                        raise
+        raise last  # type: ignore[misc]
 
 
 class AtSubscriber:
