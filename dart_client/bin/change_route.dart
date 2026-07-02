@@ -14,9 +14,33 @@ import 'dart:io';
 import 'package:at_client/at_client.dart';
 import 'package:at_cli_commons/at_cli_commons.dart';
 
+/// Locate config/ee_atsigns.json robustly whether run via `dart run` or as a
+/// compiled binary from anywhere. Order: --config, ATSIGN_CONFIG env, cwd, then
+/// locations relative to the executable/script. Platform.script's `../../` only
+/// works under `dart run` from the repo — a compiled binary breaks it.
+File findConfig(String? explicit) {
+  final scriptDir = File.fromUri(Platform.script).parent.path;
+  final exeDir = File(Platform.resolvedExecutable).parent.path;
+  final candidates = <String>[
+    if (explicit != null && explicit.isNotEmpty) explicit,
+    Platform.environment['ATSIGN_CONFIG'] ?? '',
+    'config/ee_atsigns.json', // cwd == repo root
+    '$scriptDir/../../config/ee_atsigns.json', // dart run: bin/ -> repo/config
+    '$scriptDir/config/ee_atsigns.json',
+    '$exeDir/config/ee_atsigns.json',
+    '$exeDir/../config/ee_atsigns.json',
+  ];
+  for (final p in candidates) {
+    if (p.isNotEmpty && File(p).existsSync()) return File(p);
+  }
+  throw StateError('Could not find config/ee_atsigns.json. Set --config <path> or '
+      'ATSIGN_CONFIG, or run from the repo root. Tried:\n  ${candidates.where((c) => c.isNotEmpty).join("\n  ")}');
+}
+
 Future<void> main(List<String> args) async {
   final parser = CLIBase.createArgsParser(namespace: 'smartroute')
     ..addOption('to', help: 'planner atSign (default: planner for ATSIGN_PROFILE from config)')
+    ..addOption('config', help: 'path to ee_atsigns.json (default: ATSIGN_CONFIG env or auto-locate)')
     ..addOption('lat', defaultsTo: '37.54812', help: 'incident latitude (a trackpoint on the shortest route)')
     ..addOption('lon', defaultsTo: '-122.0241', help: 'incident longitude')
     ..addOption('density', defaultsTo: '30', help: 'vehicle density: >10 reroutes, <=10 clears')
@@ -30,9 +54,8 @@ Future<void> main(List<String> args) async {
 
   // Default the planner atSign from config for the active profile ('ee' or 'vanity').
   final profile = Platform.environment['ATSIGN_PROFILE'] ?? 'ee';
-  final cfg = jsonDecode(await File.fromUri(
-          Platform.script.resolve('../../config/ee_atsigns.json'))
-      .readAsString()) as Map<String, dynamic>;
+  final cfg = jsonDecode(await findConfig(a['config'] as String?).readAsString())
+      as Map<String, dynamic>;
   final to = (a['to'] as String?) ??
       ((cfg['roles'] as Map)['planner'] as Map)[profile] as String;
 

@@ -27,9 +27,28 @@ final Set<String> granted = {};               // currently-authorized atSigns
 // Matches the Python services' ATSIGN_PROFILE env var.
 final String profile = Platform.environment['ATSIGN_PROFILE'] ?? 'ee';
 
+/// Locate config/ee_atsigns.json whether run via `dart run` or as a compiled binary.
+/// Order: ATSIGN_CONFIG env, cwd, then locations relative to script/executable.
+File _findConfig() {
+  final scriptDir = File.fromUri(Platform.script).parent.path;
+  final exeDir = File(Platform.resolvedExecutable).parent.path;
+  final candidates = <String>[
+    Platform.environment['ATSIGN_CONFIG'] ?? '',
+    'config/ee_atsigns.json',
+    '$scriptDir/../../config/ee_atsigns.json',
+    '$scriptDir/config/ee_atsigns.json',
+    '$exeDir/config/ee_atsigns.json',
+    '$exeDir/../config/ee_atsigns.json',
+  ];
+  for (final p in candidates) {
+    if (p.isNotEmpty && File(p).existsSync()) return File(p);
+  }
+  throw StateError('Could not find config/ee_atsigns.json. Set ATSIGN_CONFIG or run '
+      'from the repo root. Tried:\n  ${candidates.where((c) => c.isNotEmpty).join("\n  ")}');
+}
+
 Future<void> _loadRoles() async {
-  final cfgUri = Platform.script.resolve('../../config/ee_atsigns.json');
-  final cfg = jsonDecode(await File.fromUri(cfgUri).readAsString()) as Map<String, dynamic>;
+  final cfg = jsonDecode(await _findConfig().readAsString()) as Map<String, dynamic>;
   final roles = cfg['roles'] as Map<String, dynamic>;
   engineAtSign = (roles['policy'] as Map)[profile] as String;
   for (final entry in roles.entries) {
