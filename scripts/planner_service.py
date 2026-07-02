@@ -28,6 +28,7 @@ from atsign.atsign_io import AtPublisher, AtSubscriber  # noqa: E402
 
 POLICY = roles.atsign_for("policy")
 ALLOW: set = set()
+_denied_seen: dict = {}  # source -> last-logged monotonic time (throttle denial spam)
 
 
 def on_record(frm, key, value, raw):
@@ -44,8 +45,15 @@ def on_record(frm, key, value, raw):
             for src in revoked:
                 dropped = cache.drop_source(src)
                 print(f"[planner-service] policy revoked {src}; purged {dropped} cached record(s)")
+            print(f"[planner-service] policy applied; ALLOW = {sorted(ALLOW)}", flush=True)
         return
     if frm not in ALLOW:
+        # default-deny: record from a non-granted publisher. Log (throttled per source)
+        # so enforcement is VISIBLE instead of a silent drop.
+        now = time.monotonic()
+        if now - _denied_seen.get(frm, 0) > 10:
+            _denied_seen[frm] = now
+            print(f"[planner-service] DENIED {kn} from {frm} (not granted — dropped)", flush=True)
         return
     if kn == "live_traffic":
         cache.put_live_traffic(frm, wire.decode(kn, value))
