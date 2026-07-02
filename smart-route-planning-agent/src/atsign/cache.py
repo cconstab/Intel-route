@@ -76,6 +76,23 @@ def conditions_size(kind: str) -> int:
         return len(_conditions[kind])
 
 
+def drop_source(source: str) -> int:
+    """Remove every cached record published by `source` (all intersections + conditions).
+
+    Called when the policy engine revokes a publisher, so revocation takes effect on
+    the next planner cycle instead of lingering until each record's TTL expires.
+    Returns the number of records dropped.
+    """
+    n = 0
+    with _lock:
+        for k in [k for k in _live_traffic if k[0] == source]:
+            del _live_traffic[k]; n += 1
+        for store in _conditions.values():
+            for k in [k for k in store if k[0] == source]:
+                del store[k]; n += 1
+    return n
+
+
 def clear() -> None:
     with _lock:
         _live_traffic.clear()

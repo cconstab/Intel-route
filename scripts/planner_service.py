@@ -34,8 +34,16 @@ def on_record(frm, key, value, raw):
     kn = wire.key_name_from_atkey(key)
     if kn == "policy":
         if frm == POLICY:
+            new_allow = set(json.loads(value).get("grants", []))
+            revoked = ALLOW - new_allow
             ALLOW.clear()
-            ALLOW.update(json.loads(value).get("grants", []))
+            ALLOW.update(new_allow)
+            # Purge cached data from any just-revoked publisher so revocation takes
+            # effect this cycle — otherwise its incident lingers until TTL and the
+            # planner keeps rerouting on data from a now-denied source (flicker).
+            for src in revoked:
+                dropped = cache.drop_source(src)
+                print(f"[planner-service] policy revoked {src}; purged {dropped} cached record(s)")
         return
     if frm not in ALLOW:
         return
