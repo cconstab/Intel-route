@@ -9,15 +9,15 @@ runs on released `atsdk` 0.2.69 with the application-side workarounds in
 `smart-route-planning-agent/src/atsign/atsign_io.py`, and Dart→Python shared-key interop
 requires the fix branch (see below).
 
-## PR branches pushed to `atsign-foundation/at_python`
+## PRs opened on `atsign-foundation/at_python` (all OPEN as of 2026-07-03)
 
-| Branch | Fixes |
-|---|---|
-| `fix/notify-iv-nonce-and-session-id` | `notify()` auto-generates `iv_nonce`; `session_id` fresh per call (was a shared import-time UUID) |
-| `fix/shared-key-notification-detection` | monitor `to_string` called (shared-key notifications were mis-typed) |
-| `fix/decrypt-error-detail` | shared-key decrypt error interpolates `{e}` (was literal `- e`) |
-| `fix/disconnect-resets-connected` | `disconnect()` always clears `_connected` → monitor can rebuild the socket |
-| `fix/put-get-random-iv` | random IV for stored keys (put/get), Dart-matched; self+shared; iv_nonce carried through `UpdateVerbBuilder`; **guarded cross-SDK interop test** (`test/interop_test.py`) + opt-in CI workflow (validated green) |
+| PR | Branch | Fixes |
+|---|---|---|
+| [#522](https://github.com/atsign-foundation/at_python/pull/522) | `fix/notify-iv-nonce-and-session-id` | `notify()` auto-generates `iv_nonce`; `session_id` fresh per call (was a shared import-time UUID) |
+| [#524](https://github.com/atsign-foundation/at_python/pull/524) | `fix/shared-key-notification-detection` | monitor `to_string()` called — shared-key notifications were mis-typed (**this is bug #3**) |
+| [#525](https://github.com/atsign-foundation/at_python/pull/525) | `fix/decrypt-error-detail` | shared-key decrypt error interpolates `{e}` (was literal `- e`) |
+| [#523](https://github.com/atsign-foundation/at_python/pull/523) | `fix/disconnect-resets-connected` | `disconnect()` always clears `_connected` → monitor can rebuild the socket (issue #8) |
+| [#526](https://github.com/atsign-foundation/at_python/pull/526) | `fix/put-get-random-iv` | random IV for stored keys (put/get), Dart-matched; self+shared; iv_nonce carried through `UpdateVerbBuilder`; **guarded cross-SDK interop test** (`test/interop_test.py`) + opt-in CI workflow (validated green) |
 
 ## Issue write-ups filed (no PR yet — need maintainer/design input)
 
