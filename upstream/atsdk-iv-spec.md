@@ -27,8 +27,15 @@ else                                 iV = generateIVLegacy();   // 16 zero bytes
   iV = AtChopsUtil.generateIVFromBase64String(atKey.metadata.ivNonce!);
   ```
   (`legacy_encryption.dart:410-413`) → new shared data ALWAYS gets a random IV.
-- **Self key:** use `ivNonce` if the caller set it, else legacy zero IV — **no
-  auto-generate** (`legacy_encryption.dart:363-368`).
+- **Self key:** ALSO gets a random IV — generated one layer up, in
+  `AtClientImpl._putInternal` (`at_client_impl.dart:973`:
+  `atKey.metadata.ivNonce ??= EncryptionUtil.generateIV()`), which runs for EVERY put
+  before the encryptor. So `SelfKeyEncryption`'s zero-IV branch
+  (`legacy_encryption.dart:363-368`) is dead code on normal write paths. (Pre-3.6.0
+  that pre-step was gated on `atProtocolEmitted`, so old clients wrote zero-IV self
+  data — the residual-risk case.) Net: current Dart randomizes BOTH self and shared;
+  a port that mirrors only the per-type crypto (no `_putInternal` pre-step) will write
+  zero-IV data.
 - The IV rides along because metadata is serialized into the update command
   (Python `Metadata.__str__` already emits `:ivNonce:<b64>`).
 
