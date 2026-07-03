@@ -39,9 +39,22 @@ generateIVLegacy()`; legacy IV = 16 zero bytes).
   - Python `put` shared → Dart `get` shared ✅
   - Dart `put` shared → Python `get` shared ✅
   Guarded: skipped unless `AT_INTEROP=1` + Dart on PATH, so the normal `unittest`
-  run and fork CI are unaffected. A draft opt-in workflow
-  (`.github/workflows/interop.yml`, manual) starts the ephemeral environment, onboards
-  two atSigns, and runs it.
+  run and fork CI are unaffected.
+
+**CI / CD note**
+
+`.github/workflows/interop.yml` runs this interop test on GitHub Actions: it stands up
+the ephemeral-environment service container, adds the `vip.ve.atsign.zone` hosts entry,
+installs Python + Dart, installs the SDK, onboards two atSigns via CRAM, and runs the
+test with `AT_INTEROP=1`. It's currently `workflow_dispatch` (manual) so it's opt-in and
+doesn't change the default pipeline.
+
+It has been **validated in a real GitHub Actions run** — green in ~1m20s, with both
+directions actually executing (`Ran 2 tests ... OK`, not skipped). Recommendation:
+promote it into regular CI/CD — e.g. run on PRs that touch the crypto/`atclient` paths,
+or on a nightly schedule — so Python↔Dart wire compatibility (IVs and beyond) stays
+guaranteed rather than checked once. (Note: `workflow_dispatch` is only triggerable once
+the workflow lands on the default branch.)
 
 **Backward compatibility:** absent `ivNonce` ⇒ zero IV, so all pre-existing data
 (Python- or Dart-written) still decrypts.
