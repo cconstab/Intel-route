@@ -34,10 +34,14 @@ generateIVLegacy()`; legacy IV = 16 zero bytes).
 - `test/put_get_iv_test.py` — network-free: AES round-trip with a random IV; legacy IV
   is 16 zero bytes; `Metadata` iv_nonce base64<->bytes round-trip; `_iv_from_fetched`;
   and `_put_shared_key` generates + persists a 16-byte IV.
-- **Cross-SDK interop verified** against the Dart reference `at_client`, both
-  directions, for shared keys (random IV):
+- **Cross-SDK interop test in the lib** — `test/interop_test.py` (with a Dart helper
+  under `test/interop/`) runs both directions against the Dart reference `at_client`:
   - Python `put` shared → Dart `get` shared ✅
   - Dart `put` shared → Python `get` shared ✅
+  Guarded: skipped unless `AT_INTEROP=1` + Dart on PATH, so the normal `unittest`
+  run and fork CI are unaffected. A draft opt-in workflow
+  (`.github/workflows/interop.yml`, manual) starts the ephemeral environment, onboards
+  two atSigns, and runs it.
 
 **Backward compatibility:** absent `ivNonce` ⇒ zero IV, so all pre-existing data
 (Python- or Dart-written) still decrypts.
