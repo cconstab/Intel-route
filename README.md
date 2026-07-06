@@ -105,10 +105,8 @@ python scripts/onboard_all_ee.py
 
 **A. Live system (recommended) — runs continuously:**
 ```bash
-bash scripts/start_stack.sh &                 # policy + planner service + 6 publishers
-python -m atsign.operator_console &           # operator web console -> http://127.0.0.1:7865
-(cd dart_client && HOME=/tmp/eehome dart run bin/policy_admin.dart \
-   --atsign @kilo --root-domain vip.ve.atsign.zone) &   # policy admin web -> http://127.0.0.1:8090
+bash scripts/start_stack.sh &                 # policy + planner + 6 publishers + operator console + policy admin
+# operator console -> http://127.0.0.1:7865 · policy admin -> http://127.0.0.1:8090
 python scripts/trigger_incident.py            # inject congestion -> console flips to 🚨 REROUTE (clears in ~60s)
 # ...or change the route from PURE DART (proves Dart can drive the system too):
 (cd dart_client && HOME=/tmp/eehome dart run bin/change_route.dart \

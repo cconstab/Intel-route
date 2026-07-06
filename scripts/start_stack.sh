@@ -41,5 +41,24 @@ for r in weather_feed traffic_trends_feed events_feed; do
   ( while true; do python -u -m atsign.publishers.feed --role "$r" --count 0 --interval 2 >> "$LOG/$r.log" 2>&1; sleep 30; done ) & start
 done
 
-echo "stack up — 8 services. logs: $LOG/*.log ; pids: $LOG/pids  (blocks; run with '&')"
+# operator console (Gradio) -> http://127.0.0.1:7865
+python -u -m atsign.operator_console > "$LOG/operator.log" 2>&1 & start
+echo "operator console -> http://127.0.0.1:7865"
+
+# policy admin web UI (Dart) -> http://127.0.0.1:8090 — skipped if dart isn't installed
+if command -v dart >/dev/null 2>&1; then
+  PROFILE="${ATSIGN_PROFILE:-ee}"
+  read -r ADMIN_AT ROOT_DOM < <(python3 -c "
+import json
+c = json.load(open('$APP/config/ee_atsigns.json'))
+print(c['roles']['policy_admin']['$PROFILE'], c['rootDomains']['$PROFILE'].split(':')[0])")
+  (cd "$APP/dart_client" && \
+   dart run bin/policy_admin.dart --atsign "$ADMIN_AT" --root-domain "$ROOT_DOM" \
+     > "$LOG/policy_admin.log" 2>&1) & start
+  echo "policy admin    -> http://127.0.0.1:8090  ($ADMIN_AT)"
+else
+  echo "note: dart not on PATH — policy admin web UI not started"
+fi
+
+echo "stack up — 10 services. logs: $LOG/*.log ; pids: $LOG/pids  (blocks; run with '&')"
 wait

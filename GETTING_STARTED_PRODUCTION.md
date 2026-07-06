@@ -91,12 +91,15 @@ export ATSIGN_PROFILE=vanity
 export PYTHONPATH=$PWD/smart-route-planning-agent/src
 # HOME stays your normal home so keys resolve from ~/.atsign/keys
 
-# bring the stack up (policy engine, planner service, publishers)
+# bring the stack up — includes the operator console and (if dart is installed)
+# the policy admin web UI:
 bash scripts/start_stack.sh &
-
-# operator console -> http://127.0.0.1:7865
-python -m atsign.operator_console &
+# operator console -> http://127.0.0.1:7865 · policy admin -> http://127.0.0.1:8090
 ```
+
+The script prints `profile=vanity keystore=... (N .atKeys)` on startup and **refuses to
+start** if the keystore is empty (the usual cause: `ATSIGN_PROFILE` not exported — e.g.
+after a reboot).
 
 In production each role typically runs on its **own machine** behind its **own atSign**,
 with only that atSign's `.atKeys` present — still zero inbound ports. See
@@ -104,6 +107,9 @@ with only that atSign's `.atKeys` present — still zero inbound ports. See
 `ATSIGN_PROFILE=vanity`).
 
 ## 6. Policy admin (web)
+
+Started automatically by `start_stack.sh` (log: `/tmp/stack/policy_admin.log`). To run
+it standalone:
 
 ```bash
 cd dart_client
