@@ -121,6 +121,26 @@ class AtSubscriber:
         client.monitor_connection = mc
         client.start_monitor(self.regex)  # sees monitor_connection != None -> just runs it; blocks
 
+    def stop(self):
+        """Stop the loops and force-close the monitor socket.
+
+        Setting _running=False makes the start()/consume loops exit on their next turn;
+        closing the monitor connection unblocks a readline() that's stuck on a silently
+        dropped socket. Used by callers (e.g. the operator console watchdog) to retire a
+        wedged subscriber before spawning a fresh one, without leaking its threads.
+        """
+        self._running = False
+        try:
+            if self.client is not None:
+                self.client.stop_monitor()
+        except Exception:
+            pass
+        try:
+            if self.client is not None and self.client.monitor_connection is not None:
+                self.client.monitor_connection.disconnect()
+        except Exception:
+            pass
+
     def start(self):
         """Start one consumer thread, then (re)connect + monitor in a loop forever."""
         self._running = True

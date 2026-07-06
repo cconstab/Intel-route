@@ -12,6 +12,7 @@ without Gradio installed. Run the full UI with:  python -m atsign.operator_conso
 """
 import json
 import threading
+import time
 import warnings
 
 # Gradio polls its queue endpoint ~1/s; each poll touches a Starlette symbol that
@@ -56,9 +57,22 @@ STATE = OperatorState()
 _map = MapCreator()
 
 
+_last_rx = time.monotonic()   # last time ANY record arrived from the planner
+_subscriber = None            # the current AtSubscriber (so the watchdog can retire it)
+
+# The operator console is the one component on atsdk's Beta monitor, which can wedge
+# (a silently dropped socket leaves readline() blocked, so start()'s reconnect loop
+# never fires). The planner pushes every ~8s, so prolonged silence == a dead monitor.
+# The watchdog recreates the subscriber on silence, regardless of the failure mode.
+SILENCE_S = 45
+WATCHDOG_EVERY_S = 15
+
+
 def _on_record(frm, key, value, raw):
     if frm != PLANNER:
         return
+    global _last_rx
+    _last_rx = time.monotonic()
     kn = wire.key_name_from_atkey(key)
     if kn == "status":
         d = json.loads(value)
@@ -72,12 +86,49 @@ def _on_record(frm, key, value, raw):
         print("[operator] route geometry received", flush=True)
 
 
+def _spawn_subscriber(me):
+    global _subscriber
+    _subscriber = AtSubscriber(me, roles.namespace(), _on_record)
+    _subscriber.start()  # blocks (runs in its own thread)
+
+
+def _recreate_subscriber(me):
+    global _last_rx
+    old = _subscriber
+    if old is not None:
+        try:
+            old.stop()  # retire the wedged one so we don't leak its threads
+        except Exception:
+            pass
+    _last_rx = time.monotonic()  # grace period before the watchdog checks again
+    threading.Thread(target=lambda: _spawn_subscriber(me), daemon=True).start()
+
+
+def _watchdog_tick(me) -> bool:
+    """One watchdog check: recreate the subscriber if it's been silent too long.
+
+    Returns True if it recreated. Split out from the loop so it's unit-testable.
+    """
+    if time.monotonic() - _last_rx <= SILENCE_S:
+        return False
+    print(f"[operator] watchdog: no records for >{SILENCE_S}s — recreating subscriber",
+          flush=True)
+    _recreate_subscriber(me)
+    return True
+
+
+def _watchdog(me):
+    while True:
+        time.sleep(WATCHDOG_EVERY_S)
+        _watchdog_tick(me)
+
+
 def start_subscriber():
+    global _last_rx
     me = roles.atsign_for("operator")
-    threading.Thread(
-        target=lambda: AtSubscriber(me, roles.namespace(), _on_record).start(),
-        daemon=True,
-    ).start()
+    _last_rx = time.monotonic()
+    threading.Thread(target=lambda: _spawn_subscriber(me), daemon=True).start()
+    threading.Thread(target=lambda: _watchdog(me), daemon=True).start()
     return me
 
 
