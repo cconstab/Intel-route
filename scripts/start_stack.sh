@@ -12,6 +12,17 @@ SRC="$APP/smart-route-planning-agent/src"
 if [ "${ATSIGN_PROFILE:-ee}" = "ee" ]; then
   export HOME="${HOME_OVERRIDE:-/tmp/eehome}"
 fi
+# Fail fast if the keystore is empty — the #1 post-reboot trap: a fresh shell has no
+# ATSIGN_PROFILE, so we default to ee -> HOME=/tmp/eehome, which reboots wipe.
+KEYS_DIR="$HOME/.atsign/keys"
+KEY_COUNT=$(ls "$KEYS_DIR"/*.atKeys 2>/dev/null | wc -l | tr -d ' ')
+echo "profile=${ATSIGN_PROFILE:-ee}  keystore=$KEYS_DIR  (${KEY_COUNT} .atKeys)"
+if [ "$KEY_COUNT" = "0" ]; then
+  echo "ERROR: no .atKeys in $KEYS_DIR — refusing to start a stack that cannot authenticate." >&2
+  echo "  production:  export ATSIGN_PROFILE=vanity   (keys live in ~/.atsign/keys)" >&2
+  echo "  local EE:    start the EE container and re-onboard (reboot wiped /tmp/eehome)" >&2
+  exit 1
+fi
 source "$VENV/bin/activate"
 export PYTHONPATH="$SRC"
 LOG=/tmp/stack; mkdir -p "$LOG"; : > "$LOG/pids"
@@ -30,5 +41,5 @@ for r in weather_feed traffic_trends_feed events_feed; do
   ( while true; do python -u -m atsign.publishers.feed --role "$r" --count 0 --interval 2 >> "$LOG/$r.log" 2>&1; sleep 30; done ) & start
 done
 
-echo "stack up — 8 services. logs: $LOG/*.log ; pids: $LOG/pids"
+echo "stack up — 8 services. logs: $LOG/*.log ; pids: $LOG/pids  (blocks; run with '&')"
 wait
