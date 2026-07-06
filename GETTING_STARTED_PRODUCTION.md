@@ -101,6 +101,23 @@ The script prints `profile=vanity keystore=... (N .atKeys)` on startup and **ref
 start** if the keystore is empty (the usual cause: `ATSIGN_PROFILE` not exported — e.g.
 after a reboot).
 
+### After a reboot
+
+A fresh shell has **none** of the exports above — rerun all of them, every time:
+
+```bash
+cd ~/Intel-route
+. .venv/bin/activate
+export ATSIGN_PROFILE=vanity
+export PYTHONPATH=$PWD/smart-route-planning-agent/src
+bash scripts/start_stack.sh &      # note the '&' — the script blocks by design
+tail -f /tmp/stack/planner.log     # confirm: profile=vanity, then steady planning lines
+```
+
+Tip: put the three `export`/`activate` lines in `~/.bashrc` (or a `prod-env.sh` you
+source) so a reboot can't silently drop you back into `ee` mode. To start on boot
+automatically, run the stack under systemd or cron `@reboot` with the same env.
+
 In production each role typically runs on its **own machine** behind its **own atSign**,
 with only that atSign's `.atKeys` present — still zero inbound ports. See
 [`deploy/compose.yaml`](deploy/compose.yaml) (one container per role; set
