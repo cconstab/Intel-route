@@ -1,29 +1,30 @@
-# atsdk upstream fixes — status & what to do when merged
+# atsdk upstream fixes — status & what to do
 
 We found and fixed several bugs in the Python atSign SDK (`atsdk` / `at_client`,
-repo `atsign-foundation/at_python`) while building this migration. As of **2026-07-03**
-the PR branches are **pushed and awaiting review — NOT yet merged/released**.
+repo `atsign-foundation/at_python`) while building this migration.
 
-Until they merge + a new `atsdk` ships to PyPI, **leave everything as-is**: this project
-runs on released `atsdk` 0.2.69 with the application-side workarounds in
-`smart-route-planning-agent/src/atsign/atsign_io.py`, and Dart→Python shared-key interop
-requires the fix branch (see below).
+**As of 2026-07-06: all 5 PRs are MERGED to `trunk` — but NOT yet in a release.** The
+latest published version is **v0.2.69 (2026-06-23), which predates the merges**. So:
 
-## PRs opened on `atsign-foundation/at_python` (status as of 2026-07-03)
+- `pip install atsdk` (v0.2.69) does **NOT** contain our fixes yet.
+- To run with the fixes today, install from trunk:
+  `pip install "git+https://github.com/atsign-foundation/at_python.git@trunk"`
+  (repo readme quirk: if the build fails on `README.PyPI.md`, clone + `cp README.md
+  README.PyPI.md` + `pip install .` — or just wait for the next release).
+- This project still runs fine on **v0.2.69 with the app-side workarounds** in
+  `smart-route-planning-agent/src/atsign/atsign_io.py`; the workarounds are harmless on
+  the fixed SDK too (they set the same values the SDK now sets), so there's no rush to
+  remove them.
 
-| PR | Branch | Status | Fixes |
-|---|---|---|---|
-| [#523](https://github.com/atsign-foundation/at_python/pull/523) | `fix/disconnect-resets-connected` | **MERGED** | `disconnect()` always clears `_connected` → monitor can rebuild the socket (issue #8) |
-| [#524](https://github.com/atsign-foundation/at_python/pull/524) | `fix/shared-key-notification-detection` | **MERGED** | monitor `to_string()` called — shared-key notifications were mis-typed (**bug #3**) |
-| [#525](https://github.com/atsign-foundation/at_python/pull/525) | `fix/decrypt-error-detail` | approved (awaiting merge) | shared-key decrypt error interpolates `{e}` (was literal `- e`) |
-| [#522](https://github.com/atsign-foundation/at_python/pull/522) | `fix/notify-iv-nonce-and-session-id` | review comments **resolved** (re-review) | `notify()` auto-generates a **fresh** `iv_nonce` per call; `session_id` fresh per call |
-| [#526](https://github.com/atsign-foundation/at_python/pull/526) | `fix/put-get-random-iv` | review comments **resolved** (re-review) | random IV for stored keys (put/get), Dart-matched; self+shared; iv_nonce via `UpdateVerbBuilder`; cross-SDK interop test + CI workflow (validated green in Actions) |
+## PRs on `atsign-foundation/at_python` — all MERGED
 
-Review resolutions applied: #522 — always mint a fresh nonce per `notify()` (no CTR
-reuse) + package-level `EncryptionUtil` import. #526 — SHA-pin + update workflow
-actions, Python 3.14, extract onboarding into `test/interop/onboard.py`, install deps
-from `poetry.lock` via `uv` (drop the `README.PyPI.md` build hack), gitignore
-`.dart_tool/`, add a `pub` dependabot entry, lint the interop README, fix E702s.
+| PR | Branch | Fixes |
+|---|---|---|
+| [#522](https://github.com/atsign-foundation/at_python/pull/522) | `fix/notify-iv-nonce-and-session-id` | `notify()` auto-generates a **fresh** `iv_nonce` per call; `session_id` fresh per call |
+| [#523](https://github.com/atsign-foundation/at_python/pull/523) | `fix/disconnect-resets-connected` | `disconnect()` always clears `_connected` → monitor can rebuild the socket (issue #8) |
+| [#524](https://github.com/atsign-foundation/at_python/pull/524) | `fix/shared-key-notification-detection` | monitor `to_string()` called — shared-key notifications were mis-typed (**bug #3**) |
+| [#525](https://github.com/atsign-foundation/at_python/pull/525) | `fix/decrypt-error-detail` | shared-key decrypt error interpolates `{e}` (was literal `- e`) |
+| [#526](https://github.com/atsign-foundation/at_python/pull/526) | `fix/put-get-random-iv` | random IV for stored keys (put/get), Dart-matched; self+shared; iv_nonce via `UpdateVerbBuilder`; cross-SDK interop test + opt-in CI workflow |
 
 ## Issue write-ups filed (no PR yet — need maintainer/design input)
 
@@ -35,46 +36,46 @@ from `poetry.lock` via `uv` (drop the `README.PyPI.md` build hack), gitignore
 
 ---
 
-## When the PRs merge + a new `atsdk` is released — checklist
+## When a release > v0.2.69 ships (or you pin trunk) — checklist
 
-1. **Bump the dependency.** Pin `atsdk` to the release that contains the fixes in the
-   docs' install lines: `README.md` (§Run it), `GETTING_STARTED_PRODUCTION.md` (§1),
-   and `deploy/` if pinned. Remove any "install the fix branch" guidance.
+1. **Bump the dependency** to the release that contains the fixes in the docs' install
+   lines: `README.md` (§Run it), `GETTING_STARTED_PRODUCTION.md` (§1), and `deploy/` if
+   pinned. Until then, pin trunk if you need the fixes now (see top).
 
-2. **Simplify our workarounds** in
-   `smart-route-planning-agent/src/atsign/atsign_io.py` — but ONLY the ones the SDK now
-   covers (see mapping). The two safe removals once
-   `fix/notify-iv-nonce-and-session-id` ships:
-   - drop the manual `sk.metadata.iv_nonce = EncryptionUtil.generate_iv_nonce()` in
-     `AtPublisher.notify` (SDK generates it);
-   - drop the per-call `session_id=str(uuid.uuid4())` (SDK defaults correctly).
-   Re-run the stack end-to-end after removing, since these touch every publish.
+2. **Optional cleanup** in `smart-route-planning-agent/src/atsign/atsign_io.py` — the
+   `AtPublisher.notify` manual `iv_nonce` + per-call `session_id` are now redundant
+   (#522 does both in the SDK). They're **harmless to keep** (they just set what the SDK
+   would), so this is tidy-up, not required. Re-run the stack end-to-end if you remove
+   them, since they touch every publish.
 
-3. **Keep** the resilient-subscriber pieces until *their* fixes ship (they're issues,
-   not PRs yet): monitor-resume (`_last_epoch`), first-contact pre-warm
-   (`_ensure_shared_key`), and `AtPublisher` rebuild-and-retry.
+3. **Keep** the app-level resilience regardless — these guard failure modes the SDK does
+   NOT yet fix (still issues, not PRs):
+   - `AtSubscriber` monitor-resume (`_last_epoch`) and first-contact pre-warm
+     (`_ensure_shared_key`);
+   - `AtPublisher` rebuild-and-retry on notify failure;
+   - **operator console silence-watchdog** (`operator_console.py`) — recreates a wedged
+     `atsdk` subscriber; belt-and-suspenders over the SDK monitor even after #523.
 
-4. **Cross-SDK shared keys on stock SDK.** Once `fix/put-get-random-iv` is released,
-   Dart→Python shared keys work with released `atsdk` — no branch install needed. Drop
-   the branch-install note if referenced anywhere.
+4. **Cross-SDK shared keys.** Once #526 is in a release, Dart→Python shared keys work on
+   stock `atsdk` — no trunk/branch install needed.
 
-5. **Interop workflow.** Once `.github/workflows/interop.yml` is on the default branch
-   it's triggerable via `workflow_dispatch` / can be promoted into regular CI/CD (run on
-   crypto-path PRs or nightly).
+5. **Interop workflow** (`at_python`'s `.github/workflows/interop.yml`) is on trunk now;
+   it's `workflow_dispatch` and can be promoted into regular CI/CD (crypto-path PRs or
+   nightly).
 
-6. **Local cleanup** (optional): delete the working clone
-   `/Users/cconstab/scratch/at_python` and the now-redundant
-   `dart_client/bin/iv_interop.dart` (its twin ships in the SDK's `test/interop/`).
+6. **Local cleanup** (optional): the working clone `/Users/cconstab/scratch/at_python`
+   and `dart_client/bin/iv_interop.dart` (its twin ships in the SDK's `test/interop/`).
 
-## Mapping: our workaround → upstream → action when merged
+## Mapping: our workaround → upstream → action
 
-| App workaround (`atsign_io.py`) | Upstream | Action on release |
+| App workaround | Upstream | Action |
 |---|---|---|
-| `AtPublisher.notify` sets `iv_nonce` | PR `fix/notify-iv-nonce-and-session-id` | remove (SDK does it) |
-| `AtPublisher.notify` per-call `session_id` | same PR | remove (SDK does it) |
-| `AtSubscriber` monitor resume (`_last_epoch`) | issue (no PR) | keep until fixed+released |
-| `AtSubscriber` first-contact `_ensure_shared_key` | issue (no PR) | keep until fixed+released |
-| `AtPublisher` rebuild + retry on notify failure | issue (no PR) | keep until fixed+released |
+| `AtPublisher.notify` sets `iv_nonce` | #522 (merged) | optional remove; harmless to keep |
+| `AtPublisher.notify` per-call `session_id` | #522 (merged) | optional remove; harmless to keep |
+| `AtSubscriber` monitor-resume (`_last_epoch`) | issue (no PR) | **keep** |
+| `AtSubscriber` first-contact `_ensure_shared_key` | issue (no PR) | **keep** |
+| `AtPublisher` rebuild + retry | issue (no PR) | **keep** |
+| operator console silence-watchdog | app-level (over SDK monitor) | **keep** |
 
-> Track PR status at https://github.com/atsign-foundation/at_python/pulls (branches
-> `fix/*` above). Update this file as each merges/releases.
+> Track releases at https://github.com/atsign-foundation/at_python/releases. Update this
+> file when a version > v0.2.69 ships.
