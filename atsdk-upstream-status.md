@@ -3,18 +3,16 @@
 We found and fixed several bugs in the Python atSign SDK (`atsdk` / `at_client`,
 repo `atsign-foundation/at_python`) while building this migration.
 
-**As of 2026-07-06: all 5 PRs are MERGED to `trunk` — but NOT yet in a release.** The
-latest published version is **v0.2.69 (2026-06-23), which predates the merges**. So:
+**RESOLVED — 2026-07-07: `atsdk` v0.2.70 is released** (GitHub + PyPI) and contains all
+5 fixes (verified by inspection of the installed package). Actions taken in this repo:
 
-- `pip install atsdk` (v0.2.69) does **NOT** contain our fixes yet.
-- To run with the fixes today, install from trunk:
-  `pip install "git+https://github.com/atsign-foundation/at_python.git@trunk"`
-  (repo readme quirk: if the build fails on `README.PyPI.md`, clone + `cp README.md
-  README.PyPI.md` + `pip install .` — or just wait for the next release).
-- This project still runs fine on **v0.2.69 with the app-side workarounds** in
-  `smart-route-planning-agent/src/atsign/atsign_io.py`; the workarounds are harmless on
-  the fixed SDK too (they set the same values the SDK now sets), so there's no rush to
-  remove them.
+- ✅ dependency bumped to `"atsdk>=0.2.70"` (README, production guide, deploy/Dockerfile)
+- ✅ removed the now-redundant `AtPublisher.notify` workarounds (manual `iv_nonce` +
+  per-call `session_id`) — the SDK does both; validation suite green on 0.2.70
+- ✅ **kept** the resilience the SDK does not provide: publisher rebuild-and-retry,
+  subscriber monitor-resume + first-contact pre-warm, operator-console watchdog
+- On each running machine: `pip install -U atsdk` in the venv + `git pull`, then
+  restart the stack.
 
 ## PRs on `atsign-foundation/at_python` — all MERGED
 

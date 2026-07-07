@@ -3,15 +3,13 @@
 """
 Thin wrappers over the Python atSign SDK (atsdk) for this app's pub/sub.
 
-AtPublisher.notify() and AtSubscriber.start() encapsulate the two Beta-SDK fixes
-proven in the spike:
-  1. set `metadata.iv_nonce` per notify (else AES-CTR crashes on a None nonce);
-  2. pass a fresh `session_id` per notify (the SDK default is evaluated once at
-     import, so the server would dedup identical-id notifications).
+Requires atsdk >= 0.2.70 (which fixed notify() iv_nonce/session_id, shared-key
+notification detection, and disconnect state upstream). What remains here is
+RESILIENCE the SDK does not provide: publisher rebuild-and-retry, subscriber
+monitor-resume across reconnects, and first-contact shared-key pre-warm.
 """
 import threading
 import time
-import uuid
 from queue import Queue, Empty
 from typing import Callable
 
@@ -22,7 +20,6 @@ from at_client.connections import Address
 from at_client.connections.atmonitorconnection import AtMonitorConnection
 from at_client.connections.notification.atevents import AtEventType
 from at_client.util.authutil import AuthUtil
-from at_client.util.encryptionutil import EncryptionUtil
 
 from atsign import roles
 
@@ -57,8 +54,8 @@ class AtPublisher:
                 sk = SharedKey(key_name, self.atsign, AtSign(to))
                 sk.set_namespace(namespace or roles.namespace())
                 sk.set_time_to_live(ttl_ms)
-                sk.metadata.iv_nonce = EncryptionUtil.generate_iv_nonce()   # fix #1
-                return self.client.notify(sk, value, session_id=str(uuid.uuid4()))  # fix #2
+                # atsdk >= 0.2.70 generates a fresh iv_nonce and session_id per call.
+                return self.client.notify(sk, value)
             except Exception as e:
                 last = e
                 if attempt == 0:

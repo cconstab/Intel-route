@@ -94,7 +94,7 @@ docker run -d --name atsign-ee --add-host vip.ve.atsign.zone:127.0.0.1 \
 
 # 2. One-time: project venv with all deps
 python3 -m venv .venv && . .venv/bin/activate
-pip install atsdk pydantic langgraph==1.0.9 gpxpy folium "gradio>=6.7.0"
+pip install "atsdk>=0.2.70" pydantic langgraph==1.0.9 gpxpy folium "gradio>=6.7.0"
 
 # 3. Set up the terminal (venv + EE keystore + PYTHONPATH) — use a dedicated terminal
 source scripts/env.sh

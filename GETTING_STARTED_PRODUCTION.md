@@ -32,7 +32,7 @@ that differ from the EE.
   cd /path/to/Intel-route
   python3 -m venv .venv
   . .venv/bin/activate
-  pip install atsdk pydantic "langgraph==1.0.9" gpxpy "folium==0.14.0" "gradio>=6.7.0"
+  pip install "atsdk>=0.2.70" pydantic "langgraph==1.0.9" gpxpy "folium==0.14.0" "gradio>=6.7.0"
   ```
 - **Dart ≥ 3.5 / Flutter ≥ 3.41** (for the commuter app, the policy admin, and route tooling).
 - **The Atsign onboarding CLI** (provides `at_activate`):
@@ -167,9 +167,10 @@ alert; `--density 0` clears it (auto-clears after ~60s TTL).
 - **Admin authorization:** the engine trusts a record *from* the policy-admin atSign
   (cryptographically sound — only that atSign can send as itself). Add an **allow-list of
   admin atSigns** and use **APKAM enrollment** for the admin's devices.
-- **atsdk is Beta:** keep the hardening already in the repo (resilient subscriber, version
-  guard) or run the long-running services on the more mature **Dart** SDK. The Dart commuter
-  app uses the production-grade SDK already.
+- **atsdk:** use **>= 0.2.70** — it carries the upstreamed correctness fixes (notify
+  iv_nonce/session_id, shared-key detection, disconnect state, random IVs on put/get).
+  Keep the resilience hardening in this repo (rebuild-and-retry publisher, monitor-resume
+  subscriber, console watchdog) — those failure modes are not yet fixed upstream.
 - **Policy store:** swap the atKeys-backed `PolicyStore` for the database-backed
   implementation (interface is in `policy_engine.py`) if you want audit/scale.
 - **Legacy bridging:** if real intersection hardware still exposes a REST API, front it with
