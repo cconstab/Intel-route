@@ -17,9 +17,7 @@ from at_client import AtClient
 from at_client.common import AtSign
 from at_client.common.keys import SharedKey
 from at_client.connections import Address
-from at_client.connections.atmonitorconnection import AtMonitorConnection
 from at_client.connections.notification.atevents import AtEventType
-from at_client.util.authutil import AuthUtil
 
 from atsign import roles
 
@@ -101,25 +99,8 @@ class AtSubscriber:
         self._key_retries = 4
         self._key_backoff_s = 1.5
 
-    def _start_monitor_resuming(self):
-        """Build the monitor connection with our resume position, then run it (blocks).
-
-        Mirrors AtClient.start_monitor's own construct+connect+auth, but seeds
-        `last_received_time` first so the monitor verb resumes from where we left off.
-        """
-        client = self.client
-        mc = AtMonitorConnection(
-            queue=self.q, atsign=client.atsign, address=client.secondary_address,
-            verbose=self.verbose, regex=self.regex,
-        )
-        mc.last_received_time = self._last_epoch  # 0 on first connect; last-seen epoch after
-        mc.connect()
-        AuthUtil.authenticate_with_pkam(mc, client.atsign, client.keys)
-        client.monitor_connection = mc
-        client.start_monitor(self.regex)  # sees monitor_connection != None -> just runs it; blocks
-
     def stop(self):
-        """Stop the loops and force-close the monitor socket.
+        """Stop the loops, the SDK heartbeat, and force-close the monitor socket.
 
         Setting _running=False makes the start()/consume loops exit on their next turn;
         closing the monitor connection unblocks a readline() that's stuck on a silently
@@ -134,12 +115,18 @@ class AtSubscriber:
             pass
         try:
             if self.client is not None and self.client.monitor_connection is not None:
+                self.client.monitor_connection.stop_heart_beat()  # atsdk >= 0.2.71
                 self.client.monitor_connection.disconnect()
         except Exception:
             pass
 
     def start(self):
-        """Start one consumer thread, then (re)connect + monitor in a loop forever."""
+        """Start one consumer thread, then (re)connect + monitor in a loop forever.
+
+        Each (re)connect resumes from the newest notification epoch we've processed
+        (atsdk >= 0.2.71: start_monitor(last_received_time=...)), so nothing is missed
+        during the gap and the retained backlog isn't replayed.
+        """
         self._running = True
         threading.Thread(target=self._consume, daemon=True).start()
         while self._running:
@@ -152,7 +139,8 @@ class AtSubscriber:
                 )
                 resume = f" (resuming from epoch {self._last_epoch})" if self._last_epoch else ""
                 print(f"[subscriber {self.atsign_str}] monitor starting{resume}", flush=True)
-                self._start_monitor_resuming()  # blocks until the monitor dies
+                # blocks until the monitor dies
+                self.client.start_monitor(self.regex, last_received_time=self._last_epoch)
                 print(f"[subscriber {self.atsign_str}] monitor ended; reconnecting in 3s", flush=True)
             except Exception as e:
                 print(f"[subscriber {self.atsign_str}] monitor error: {e}; reconnecting in 3s", flush=True)

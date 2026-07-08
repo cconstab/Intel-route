@@ -3,14 +3,22 @@
 We found and fixed several bugs in the Python atSign SDK (`atsdk` / `at_client`,
 repo `atsign-foundation/at_python`) while building this migration.
 
-**RESOLVED — 2026-07-07: `atsdk` v0.2.70 is released** (GitHub + PyPI) and contains all
-5 fixes (verified by inspection of the installed package). Actions taken in this repo:
+**RESOLVED — v0.2.70 (2026-07-07) shipped the first 5 fixes; v0.2.71 (2026-07-08)
+shipped the monitor lifecycle/resume batch** (#529, #530 — verified in the installed
+package). Actions taken in this repo:
 
-- ✅ dependency bumped to `"atsdk>=0.2.70"` (README, production guide, deploy/Dockerfile)
-- ✅ removed the now-redundant `AtPublisher.notify` workarounds (manual `iv_nonce` +
-  per-call `session_id`) — the SDK does both; validation suite green on 0.2.70
-- ✅ **kept** the resilience the SDK does not provide: publisher rebuild-and-retry,
-  subscriber monitor-resume + first-contact pre-warm, operator-console watchdog
+- ✅ dependency bumped to `"atsdk>=0.2.71"` (README, production guide, deploy/Dockerfile)
+- ✅ removed the `AtPublisher.notify` workarounds (manual `iv_nonce` + per-call
+  `session_id`) — the SDK does both since 0.2.70
+- ✅ **simplified `AtSubscriber` (0.2.71):** the hand-rolled monitor construction is gone —
+  reconnects now use `client.start_monitor(regex, last_received_time=_last_epoch)`
+  (#530), and `stop()` also calls the connection's `stop_heart_beat()` (#529), so a
+  retired subscriber leaves no SDK heartbeat behind. Live-verified on the EE.
+- ✅ **kept** what the SDK still doesn't provide: publisher rebuild-and-retry,
+  first-contact pre-warm, operator-console watchdog
+- 🔬 **asyncio RFC open:** [#531](https://github.com/atsign-foundation/at_python/pull/531)
+  — draft `at_client.aio` PoC (async monitor streams; would obsolete the remaining
+  hardening if adopted)
 - On each running machine: `pip install -U atsdk` in the venv + `git pull`, then
   restart the stack.
 
