@@ -643,8 +643,9 @@ def create_gradio_interface() -> gr.Blocks:
 if __name__ == "__main__":
     import os
 
-    # Get configuration from environment variables
-    server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+    # Get configuration from environment variables. Default to loopback; containers
+    # set GRADIO_SERVER_NAME=0.0.0.0 (compose pins the host-side mapping to 127.0.0.1).
+    server_name = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
     server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
 
     server_config = {

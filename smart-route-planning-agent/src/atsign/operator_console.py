@@ -11,6 +11,7 @@ The Gradio import is guarded so the data + map-render path can be unit-tested
 without Gradio installed. Run the full UI with:  python -m atsign.operator_console
 """
 import json
+import os
 import threading
 import time
 import warnings
@@ -201,7 +202,12 @@ def build_ui():
 def main():
     me = start_subscriber()
     print(f"[operator-console] {me} subscribed; launching Gradio UI…")
-    build_ui().launch(server_name="0.0.0.0", server_port=7865)
+    # Loopback only: the console is an operator tool, not a public service. To reach
+    # it from another machine, tunnel (e.g. ssh -L 7865:127.0.0.1:7865 <host>).
+    # OPERATOR_BIND exists for containers, where the port mapping needs 0.0.0.0
+    # inside the container and the HOST side of the mapping is pinned to 127.0.0.1.
+    bind = os.environ.get("OPERATOR_BIND", "127.0.0.1")
+    build_ui().launch(server_name=bind, server_port=7865)
 
 
 if __name__ == "__main__":

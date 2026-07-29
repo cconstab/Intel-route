@@ -27,7 +27,10 @@ services:
   operator:
     <<: *svc
     command: ["python", "-m", "atsign.operator_console"]
-    ports: ["7865:7865"]
+    environment:                     # NB: replaces the anchor's map — keep ATSIGN_PROFILE
+      ATSIGN_PROFILE: ${ATSIGN_PROFILE:-vanity}
+      OPERATOR_BIND: 0.0.0.0         # inside the container only; host side is loopback
+    ports: ["127.0.0.1:7865:7865"]   # console reachable from the host only
     volumes: ["./keys/operator:/keys/.atsign/keys:ro"]
 
   intxn-market-st:
