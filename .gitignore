@@ -22,3 +22,7 @@ dart_client/pubspec.lock
 
 # OS
 .DS_Store
+
+# Flutter build output
+intersection_app/build/
+intersection_app/.dart_tool/
