@@ -154,6 +154,10 @@ def main(argv):
     print(f"[policy] loaded persisted rules -> {sorted(granted)}" if from_store
           else "[policy] first run on this atSign: seeding rules from --grant")
 
+    # Whether the store carries the marker that tells a later start "these rules are
+    # real, do not re-seed from --grant". Retried on every change until it sticks.
+    marked = [from_store]
+
     def persist():
         failed = []
         for s in all_publishers:
@@ -161,9 +165,16 @@ def main(argv):
                 (store.grant if s in granted else store.revoke)(s)
             except Exception as e:
                 failed.append(f"{s} ({e})")
+        if not marked[0]:
+            try:
+                store.mark_initialised()
+                marked[0] = True
+            except Exception as e:
+                failed.append(f"the initialised marker ({e}) — until this succeeds, a "
+                              "restart will look like a first run and re-seed from --grant")
         if failed:
             print("[policy] WARNING: rules were not fully persisted, so a restart may "
-                  f"not reflect this change: {', '.join(failed)}")
+                  f"not reflect this change: {'; '.join(failed)}")
 
     mirror_failed = [False]  # so a heartbeat that cannot reach the admin logs once, not forever
 
@@ -216,9 +227,13 @@ def main(argv):
 
     print(f"[policy] engine {me_str}; initial grants {sorted(granted)}")
     persist()
-    store.mark_initialised()
-    publish()
-    print(f"[policy] rules persisted as atKeys; published to {planner} and {admin_atsign}")
+    try:
+        publish()
+        print(f"[policy] rules persisted as atKeys; published to {planner} and {admin_atsign}")
+    except Exception as e:
+        # The rules are held and will go out on the next heartbeat: staying up with the
+        # correct rule set beats exiting because one publish failed.
+        print(f"[policy] first publish failed ({e}); retrying on the heartbeat")
 
     # Listen for admin rule changes from @route_policy_admin (segregation of duties).
     time.sleep(2)  # let the engine/publisher connections settle before a 3rd client
@@ -230,7 +245,12 @@ def main(argv):
 
     while True:
         time.sleep(args.interval)
-        publish()
+        try:
+            publish()
+        except Exception as e:
+            # An unguarded publish here would end the process, and a dead engine looks
+            # exactly like a policy that is never applied.
+            print(f"[policy] heartbeat publish failed ({e}); retrying in {args.interval}s")
 
 
 if __name__ == "__main__":

@@ -152,6 +152,12 @@ worth knowing:
 - The engine **refuses to start** if it cannot read its own rules, rather than falling
   back to `--grant` and silently re-authorising a publisher you revoked. `--grant`
   applies only to an atSign that has never held rules.
+- If the page says **"Waiting for the engine's current rule set…"** for more than ~45s it
+  now explains itself in a banner: whether a policy record arrived from an unexpected
+  sender (a profile mismatch between admin and engine), or nothing arrived at all. The
+  engine mirrors its rules to the atSign configured as `policy_admin`, so the admin must
+  run **as that atSign** or no rule set will ever reach it. If nothing arrives, check
+  `policy_engine.log` — it ends with a `FATAL` line if the engine refused to start.
 - A toggle is a **request**, not a fact. The page shows "Applying…" until the engine
   mirrors the change back, re-pushes it up to 3 times in case the notification was lost,
   and then states plainly that it was not applied — including the atServer's verdict on

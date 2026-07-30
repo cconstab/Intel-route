@@ -38,6 +38,13 @@ String lastPushStatus = '';  // the atServer's verdict on our last push (deliver
 const int kMaxAttempts = 3;
 const Duration kRetryAfter = Duration(seconds: 8);
 const Duration kGiveUpAfter = Duration(seconds: 30);
+// The engine republishes every 30s, so silence past this means something is wrong.
+const Duration kExpectEngineWithin = Duration(seconds: 45);
+
+final DateTime startedAt = DateTime.now();
+int policyNotificationsSeen = 0;   // matched the engine
+int otherNotificationsSeen = 0;    // arrived, but not from the engine we expect
+String lastOtherSender = '';
 
 // Which config column to use: 'ee' (local test env, default) or 'vanity' (production).
 // Matches the Python services' ATSIGN_PROFILE env var.
@@ -83,11 +90,18 @@ void _watchEngine() {
   atClient.notificationService
       .subscribe(regex: kNamespace, shouldDecrypt: true)
       .listen((notification) {
-    // The sender check is what matters: only the engine may state the rule set.
-    if (notification.from != engineAtSign ||
-        !notification.key.contains('policy')) {
+    if (!notification.key.contains('policy')) return;
+    // The sender check is what matters: only the engine may state the rule set. Compare
+    // loosely on case and the leading '@' so a formatting difference cannot silently
+    // reject every message and leave the page waiting forever.
+    if (_normalise(notification.from) != _normalise(engineAtSign)) {
+      otherNotificationsSeen++;
+      lastOtherSender = notification.from;
+      stdout.writeln('[policy-admin] ignoring a policy record from '
+          '"${notification.from}" — this admin only accepts $engineAtSign');
       return;
     }
+    policyNotificationsSeen++;
     try {
       final data = jsonDecode(notification.value!) as Map<String, dynamic>;
       final engineGrants =
@@ -98,6 +112,10 @@ void _watchEngine() {
       granted
         ..clear()
         ..addAll(engineGrants);
+      if (!synced || _reportedStall) {
+        stdout.writeln('[policy-admin] received the rule set from $engineAtSign');
+        _reportedStall = false;
+      }
       synced = true;
       if (changed) {
         stdout.writeln('[policy-admin] engine rule set is now '
@@ -116,15 +134,40 @@ void _watchEngine() {
   }, onError: (e) => stdout.writeln('[policy-admin] subscription error: $e'));
 }
 
+String _normalise(String atSign) => atSign.trim().toLowerCase().replaceFirst('@', '');
+
+/// Say why the page is still empty. Silence here used to be indistinguishable from a
+/// healthy but quiet system, so an operator had nothing to act on.
+String? _notSyncedReport() {
+  if (synced) return null;
+  final waited = DateTime.now().difference(startedAt);
+  if (waited < kExpectEngineWithin) return null;
+  final seen = otherNotificationsSeen > 0
+      ? ' A policy record did arrive, but from "$lastOtherSender" rather than '
+          '$engineAtSign — check that both sides use the same ATSIGN_PROFILE.'
+      : ' Nothing has arrived at all.';
+  return 'No rule set from the policy engine $engineAtSign after ${waited.inSeconds}s '
+      '(it publishes every 30s).$seen This admin is signed in as $me, and the engine '
+      'mirrors its rules to the atSign configured as policy_admin — if that is not $me, '
+      'no rule set will ever arrive here. Otherwise check that the policy engine is '
+      'running: policy_engine.log ends with a FATAL line if it refused to start.';
+}
+
 bool _sameSet(Set<String> a, Set<String> b) =>
     a.length == b.length && a.containsAll(b);
 
 bool _chasing = false;
+bool _reportedStall = false;
 
 /// Re-push an unconfirmed change, then report it if the engine never applies it. Without
 /// this, a lost notification or a rejected change is indistinguishable from a UI glitch:
 /// the switch just springs back with no explanation.
 Future<void> _chaseUnconfirmed() async {
+  final stalled = _notSyncedReport();
+  if (stalled != null && !_reportedStall) {
+    _reportedStall = true;
+    stdout.writeln('[policy-admin] $stalled');
+  }
   if (_chasing) return; // a push can outlast the timer tick; don't double-count attempts
   _chasing = true;
   try {
@@ -306,7 +349,7 @@ Future<void> main(List<String> args) async {
           'roles': roleToAtSign,
           'pending': wanted?.toList(),
           'attempts': attempts,
-          'unapplied': unappliedReport,
+          'unapplied': unappliedReport ?? _notSyncedReport(),
           'lastPush': lastPushStatus,
         }));
     } else if (req.uri.path == '/') {
