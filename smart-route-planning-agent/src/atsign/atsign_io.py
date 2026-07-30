@@ -128,6 +128,13 @@ class AtPublisher:
         self._root = root or roles.root()
         self._verbose = verbose
         self._stale = False  # set when a send was abandoned; forces a fresh client
+        # One publisher owns one TLS socket carrying one command stream, so two threads
+        # sending at once interleave writes and read each other's replies. That surfaces
+        # as [SSL: WRONG_VERSION_NUMBER] or "Read on closed or unwrapped SSL socket" and
+        # leaves the publisher wedged. Services do share a publisher across threads — the
+        # policy engine publishes from both its heartbeat and its admin callback — so
+        # serialise every send here rather than relying on each caller to remember.
+        self._send_lock = threading.Lock()
         self.client = self._new_client()
 
     def _new_client(self) -> AtClient:
@@ -145,6 +152,20 @@ class AtPublisher:
         Abandoning a stuck worker (it exits when the socket finally resolves) keeps a
         caller's loop — e.g. the planner's 8s cycle — alive no matter what.
         """
+        # Held across the join so a second thread cannot start a send while this one is
+        # mid-exchange. A send abandoned at the deadline marks the client stale, so the
+        # waiting thread rebuilds rather than inheriting a half-read socket.
+        if not self._send_lock.acquire(timeout=deadline_s):
+            raise TimeoutError(
+                f"notify to {to} waited {deadline_s:.0f}s for another send on this "
+                "publisher; abandoned")
+        try:
+            return self._notify_bounded(to, key_name, value, namespace, ttl_ms, deadline_s)
+        finally:
+            self._send_lock.release()
+
+    def _notify_bounded(self, to: str, key_name: str, value: str,
+                        namespace: str | None, ttl_ms: int, deadline_s: float) -> str:
         outcome: dict = {}
 
         def send():

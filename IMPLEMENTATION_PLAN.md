@@ -264,6 +264,22 @@ Reproduced *and* verified against a frozen atServer (`docker pause` — no FIN/R
 real network change): `validation/live_outage_test.py`, plus
 `validation/test_subscriber_liveness.py` offline.
 
+### One publisher, one send at a time
+
+A publisher owns a single TLS socket carrying one command stream, and services share a
+publisher across threads — the policy engine publishes from both its heartbeat loop and its
+admin callback, the planner from its cycle. Two simultaneous sends interleaved their writes
+and read each other's replies, which the SDK surfaced as
+`[SSL: WRONG_VERSION_NUMBER] wrong version number` and
+`Read on closed or unwrapped SSL socket`, leaving the publisher wedged.
+
+The visible symptom was the confusing one: the engine's rule set was correct, the admin page
+agreed with it, and yet the planner kept enforcing an older set and denying a publisher the
+operator had just re-authorised — because the policy record to the planner was the send that
+kept failing. `AtPublisher.notify()` now serialises sends per publisher, so no caller has to
+remember. Test: `validation/test_publisher_serialisation.py` (verified to detect 3 overlaps
+with the lock removed).
+
 ### Policy applied consistently
 
 Symptom: a revoked publisher was sometimes still accepted, and an authorization appeared
