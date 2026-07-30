@@ -65,10 +65,23 @@ void main() {
       expect(reporter.densityFor(config, 1), 15);
       // and two match the density the proven CLI demo sends
       expect(reporter.densityFor(config, 2), 30);
+      // the settings slider now reaches 50 per car
+      expect(reporter.densityFor(config.copyWith(densityPerCar: 50), 3), 150);
     });
   });
 
   group('car counter', () {
+    test('an unlabelled box still counts (ML Kit often returns boxes with no label)', () {
+      // Regression: these arrived scored 0.0 and were filtered out, so several cars
+      // in view counted as none.
+      final counter = CarCounter(minConfidence: 0.30);
+      expect(counter.countIn(const [
+        Detection('Object', 1.0),
+        Detection('Object', 1.0),
+        Detection('Object', 1.0),
+      ]), 3);
+    });
+
     test('filters by confidence', () {
       final counter = CarCounter(minConfidence: 0.5);
       expect(counter.countIn([const Detection('Object', 0.9), const Detection('Object', 0.2)]), 1);

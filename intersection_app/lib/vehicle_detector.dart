@@ -89,7 +89,10 @@ class VehicleDetector {
 
     _objects = ObjectDetector(
       options: ObjectDetectorOptions(
-        mode: DetectionMode.stream,
+        // Stream mode is optimised for tracking a single prominent object and
+        // under-reports a group; single-image mode enumerates them properly. We
+        // sample frames and skip while busy, so the added latency is fine.
+        mode: DetectionMode.single,
         classifyObjects: true,
         multipleObjects: true,
       ),
@@ -120,11 +123,13 @@ class VehicleDetector {
       final detected = await _objects?.processImage(input) ?? const [];
       final labels = await _labeler?.processImage(input) ?? const [];
 
+      // A detected box counts even when ML Kit cannot classify it — it frequently
+      // returns unlabelled boxes. Scoring those 0.0 made the confidence filter drop
+      // every one of them, so several cars in view counted as none.
       final objects = detected
-          .map((o) => Detection(
-                o.labels.isNotEmpty ? o.labels.first.text : 'Object',
-                o.labels.isNotEmpty ? o.labels.first.confidence : 0.0,
-              ))
+          .map((o) => o.labels.isEmpty
+              ? const Detection('Object', 1.0)
+              : Detection(o.labels.first.text, o.labels.first.confidence))
           .toList();
       final frameLabels = labels
           .map((l) => Detection(l.label, l.confidence))

@@ -33,9 +33,9 @@ Two settings matter, both under the **tune** icon:
    it is currently planning**. Leave this on the default
    `berkeley-oakland-i880 (midpoint — proven)` preset; a report anywhere else is
    delivered and then ignored.
-2. **Density per detected car** (default 15) — the planner reroutes above a density of
-   **10**, so one recognised car already reports 15 (and two report 30, the density the
-   proven CLI demo sends).
+2. **Density per detected car** (default 15, slider up to 50) — the planner reroutes
+   above a density of **10**, so one recognised car already reports 15 (two report 30,
+   the density the proven CLI demo sends). Raise it to make a single car dominate.
 
 Turn **Reporting** on and the app sends every few seconds. Each report carries a
 60 s TTL, so when you take the cars away the planner's cache expires and the route
@@ -64,6 +64,22 @@ top labels, so you can see exactly what the model thinks.
 Neither model ships as an asset — nothing to license or bundle. Frames are sampled
 (every 6th by default) and skipped while inference is busy, so the preview stays
 smooth.
+
+### Under-counting cars
+
+The readout shows **detector boxes this frame** next to the reported count, so you can
+see whether the object detector or the gate is the limit. Two things already address
+the common causes:
+
+* ML Kit often returns boxes with **no label**; those are counted (a box is a car) —
+  previously they scored 0.0 and were dropped by the confidence filter, so a group of
+  cars counted as one.
+* Detection runs in **single-image mode**, which enumerates a group properly. Stream
+  mode is tuned for tracking one prominent object and under-reports several.
+
+If boxes still read lower than the cars in view: separate the cars so they do not merge
+into one region, fill more of the frame, and keep the background plain. A per-object
+model (below) is the real fix for dense scenes.
 
 ### If you want true per-object car labels
 

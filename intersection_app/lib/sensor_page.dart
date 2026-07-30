@@ -39,6 +39,7 @@ class _SensorPageState extends State<SensorPage> {
   Timer? _timer;
 
   int _cars = 0;
+  int _boxes = 0;  // raw detector boxes this frame, shown for diagnosis
   String _lastLabels = '';
   String _status = 'Not reporting yet.';
   bool _lastOk = false;
@@ -85,9 +86,13 @@ class _SensorPageState extends State<SensorPage> {
         .take(3)
         .map((l) => '${l.label} ${(l.confidence * 100).round()}%')
         .join(', ');
-    if (cars != _cars || labels != _lastLabels || frame.vehicleInView != _vehicleInView) {
+    if (cars != _cars ||
+        labels != _lastLabels ||
+        frame.objects.length != _boxes ||
+        frame.vehicleInView != _vehicleInView) {
       setState(() {
         _cars = cars;
+        _boxes = frame.objects.length;
         _lastLabels = labels;
         _vehicleInView = frame.vehicleInView;
       });
@@ -200,6 +205,8 @@ class _SensorPageState extends State<SensorPage> {
         children: [
           Text('$_cars vehicles detected',
               style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('detector boxes this frame: $_boxes',
+              style: const TextStyle(color: Colors.white54, fontSize: 11)),
           Text('reported density: $_density',
               style: TextStyle(
                   color: rerouting ? Colors.orangeAccent : Colors.white70,
@@ -392,9 +399,18 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
             const SizedBox(height: 16),
-            _stepper('Density per detected car', _perCar, 1, 20,
-                (v) => setState(() => _perCar = v),
-                help: 'cars x this = reported density (planner reroutes above 10)'),
+            const SizedBox(height: 8),
+            Text('Density per detected car: $_perCar'),
+            const Text('cars x this = reported density (planner reroutes above 10)',
+                style: TextStyle(fontSize: 11, color: Colors.grey)),
+            Slider(
+              value: _perCar.toDouble(),
+              min: 1,
+              max: 50,
+              divisions: 49,
+              label: '$_perCar',
+              onChanged: (v) => setState(() => _perCar = v.round()),
+            ),
             _stepper('Report interval (seconds)', _interval, 2, 60,
                 (v) => setState(() => _interval = v)),
             const SizedBox(height: 8),
