@@ -46,9 +46,17 @@ package). Actions taken in this repo:
   Upstream fix offered in
   [#545](https://github.com/atsign-foundation/at_python/pull/545): `execute_command`
   discards a connection whose reply was never read.
-  App side: never reuse a client after a failed send — it is marked stale even when the
-  rebuild fails, so a wedged publisher recovers without a restart
-  (`validation/live_desync_recovery_test.py`).
+  App side, two layers:
+  1. **the guard**: `atsign_io` applies #545's behaviour locally at import — a connection
+     whose read fails is discarded, so a queued reply can never be served to a later
+     command. This closes the dangerous silent case (a lookup returning a *different*
+     record's value and succeeding, e.g. another recipient's shared key). Remove it once
+     #545 ships; leaving it is harmless, as disconnecting twice is a no-op.
+     Tests: `validation/test_abandoned_read_guard.py`,
+     `validation/live_desync_guard_test.py`.
+  2. never reuse a client after a failed send — it is marked stale even when the rebuild
+     fails, so a wedged publisher recovers without a restart
+     (`validation/live_desync_recovery_test.py`).
   [#544](https://github.com/atsign-foundation/at_python/pull/544) (replace an
   unusable stored key) was **closed as wrong-headed**: the desynchronised case reports
   the identical error, so replacing the key would rotate a perfectly good one. Our

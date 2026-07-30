@@ -24,9 +24,43 @@ from at_client import AtClient
 from at_client.common import AtSign
 from at_client.common.keys import SharedKey
 from at_client.connections import Address
+from at_client.connections.atconnection import AtConnection
 from at_client.connections.notification.atevents import AtEventType
 
 from atsign import roles
+
+
+def _discard_connection_on_abandoned_read() -> None:
+    """Never leave a connection holding a reply nobody read.
+
+    If a command is sent and its reply is not fully read — a read timeout, or any error
+    while reading — that reply stays queued on the socket. The next command then gets
+    the PREVIOUS command's answer, and every command after it is one reply behind. That
+    is worse than an error: a lookup can return a different record's value and succeed,
+    so we could encrypt to the wrong recipient's shared key without anything raising.
+
+    This is at_python PR #545. Applied here until it ships; removing it afterwards is
+    safe either way, because disconnecting twice is a no-op.
+    """
+    if getattr(AtConnection, "_discards_on_abandoned_read", False):
+        return
+    original_read = AtConnection.read
+
+    def read(self):
+        try:
+            return original_read(self)
+        except Exception:
+            try:
+                self.disconnect()
+            except Exception:
+                pass
+            raise
+
+    AtConnection.read = read
+    AtConnection._discards_on_abandoned_read = True
+
+
+_discard_connection_on_abandoned_read()
 
 # Command/response round trips are fast; well past this the socket is not coming back.
 COMMAND_READ_TIMEOUT_S = 15.0
