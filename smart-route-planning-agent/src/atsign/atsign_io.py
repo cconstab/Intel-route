@@ -132,53 +132,17 @@ class AtPublisher:
             raise outcome["error"]
         return outcome["result"]
 
-    def _repair_shared_key(self, to: str) -> bool:
-        """Delete a corrupt shared key so the SDK recreates it on the next send.
-
-        The AES key we share with a recipient is stored twice: our own copy
-        (`shared_key.<them>@<us>`) and theirs (`@<them>:shared_key@<us>`). If our copy
-        becomes unreadable — 'Failed to decrypt shared_key... Ciphertext length must be
-        equal to key size', e.g. after a write on a desynchronised connection — every
-        later send to that recipient fails identically, forever, and a restart re-reads
-        the same bad record. Deleting both copies makes the SDK mint a fresh pair.
-        """
-        me = self.atsign.to_string()
-        other = AtSign(to)
-        records = [
-            f"shared_key.{other.without_prefix}{me}",   # our copy
-            f"{other.to_string()}:shared_key{me}",      # the recipient's copy
-        ]
-        repaired = False
-        for record in records:
-            try:
-                self.client.secondary_connection.execute_command(f"delete:{record}", True)
-                repaired = True
-            except Exception as e:
-                print(f"[publisher {self.atsign}] could not delete {record}: {e}", flush=True)
-        if repaired:
-            print(f"[publisher {self.atsign}] deleted the corrupt shared key for {to}; "
-                  f"a fresh one will be created on the next send", flush=True)
-        return repaired
-
-    @staticmethod
-    def _is_corrupt_shared_key(error: Exception) -> bool:
-        text = str(error)
-        return "shared_key" in text and (
-            "Failed to decrypt" in text or "Ciphertext length" in text)
-
     def _notify_once(self, to: str, key_name: str, value: str,
                      namespace: str | None, ttl_ms: int) -> str:
-        """One send, escalating: retry, then a fresh client, then repair the shared key.
+        """One send, retrying once on a fresh client.
 
-        A read timeout leaves the abandoned reply in the socket, so every later command
-        on that connection reads the PREVIOUS command's answer. Reading a shared key
-        then yields a non-ciphertext and reports exactly the same error as a genuinely
-        damaged record — which is why a restart clears it. So a fresh connection is
-        always tried BEFORE concluding the stored key is damaged; deleting it on a
-        desynchronised read would rotate a perfectly good key for both parties.
+        A read timeout leaves the abandoned reply queued on the socket, so any later
+        command on that connection reads the PREVIOUS command's answer — which is why
+        a failed send must never be retried on the same client, and why a wedged
+        publisher recovered as soon as it was restarted.
         """
         last: Exception | None = None
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 if self._stale:
                     self._stale = False
@@ -190,14 +154,10 @@ class AtPublisher:
                 return self.client.notify(sk, value)
             except Exception as e:
                 last = e
-                if attempt == 2:
+                if attempt == 1:
                     break
                 print(f"[publisher {self.atsign}] notify to {to} failed ({e}); "
                       f"rebuilding client and retrying", flush=True)
-                # Only on the SECOND identical shared-key failure — i.e. it persisted
-                # across a fresh connection — is the stored record actually damaged.
-                if attempt == 1 and self._is_corrupt_shared_key(e):
-                    self._repair_shared_key(to)
                 time.sleep(1)  # let the old connection settle before a fresh one
                 try:
                     self.client = self._new_client()
