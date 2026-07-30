@@ -8,9 +8,10 @@ import 'dart:async';
 import 'package:at_client/at_client.dart';
 import 'package:at_client_flutter/at_client_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_smart_scanner/flutter_smart_scanner.dart';
+import 'package:camera/camera.dart';
 
 import 'car_counter.dart';
+import 'vehicle_detector.dart';
 import 'traffic_report.dart';
 
 class SensorPage extends StatefulWidget {
@@ -21,6 +22,12 @@ class SensorPage extends StatefulWidget {
 
 class _SensorPageState extends State<SensorPage> {
   final CarCounter _counter = CarCounter();
+  final VehicleDetector _detector = VehicleDetector();
+  StreamSubscription<DetectionFrame>? _frameSub;
+  bool _cameraReady = false;
+  String _cameraError = '';
+  bool _vehicleInView = false;
+  bool _gateOnly = true;  // ignore counts when no vehicle is recognised in view
   late final TrafficReporter _reporter;
   late final String _me;
 
@@ -42,28 +49,43 @@ class _SensorPageState extends State<SensorPage> {
     final atClient = AtClientManager.getInstance().atClient;
     _reporter = TrafficReporter(atClient);
     _me = atClient.getCurrentAtSign() ?? '(unknown)';
+    _startCamera();
+  }
+
+  Future<void> _startCamera() async {
+    try {
+      await _detector.start();
+      _frameSub = _detector.frames.listen(_onFrame);
+      if (mounted) setState(() => _cameraReady = true);
+    } catch (e) {
+      if (mounted) setState(() => _cameraError = '$e');
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _frameSub?.cancel();
+    _detector.dispose();
     super.dispose();
   }
 
   // ---------------------------------------------------------------- detection
-  void _onDetect(List<ScannerResult> results) {
-    final objects = results.where((r) => r.mode == ScannerMode.object).toList();
-    _counter.addFrame(
-      objects.map((r) => Detection(r.content, r.confidence)).toList(),
-    );
+  void _onFrame(DetectionFrame frame) {
+    // With the gate on, objects only count while the labeler recognises a vehicle —
+    // so a desk full of mugs doesn't report congestion.
+    final counted = (_gateOnly && !frame.vehicleInView) ? const <Detection>[] : frame.objects;
+    _counter.addFrame(counted);
     final cars = _counter.smoothedCount();
-    final labels = objects.isEmpty
-        ? ''
-        : objects.map((r) => '${r.content} ${(r.confidence * 100).round()}%').join(', ');
-    if (cars != _cars || labels != _lastLabels) {
+    final labels = frame.frameLabels
+        .take(3)
+        .map((l) => '${l.label} ${(l.confidence * 100).round()}%')
+        .join(', ');
+    if (cars != _cars || labels != _lastLabels || frame.vehicleInView != _vehicleInView) {
       setState(() {
         _cars = cars;
         _lastLabels = labels;
+        _vehicleInView = frame.vehicleInView;
       });
     }
   }
@@ -120,13 +142,7 @@ class _SensorPageState extends State<SensorPage> {
           Expanded(
             child: Stack(
               children: [
-                Positioned.fill(
-                  child: SmartScanner(
-                    onDetect: _onDetect,
-                    accentColor: Colors.tealAccent,
-                    showControls: false,
-                  ),
-                ),
+                Positioned.fill(child: _preview()),
                 Positioned(left: 12, top: 12, child: _readout()),
               ],
             ),
@@ -135,6 +151,36 @@ class _SensorPageState extends State<SensorPage> {
         ],
       ),
     );
+  }
+
+  Widget _preview() {
+    if (_cameraError.isNotEmpty) {
+      return Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Camera unavailable:\n$_cameraError',
+              textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+        ),
+      );
+    }
+    final controller = _detector.controller;
+    if (!_cameraReady || controller == null || !controller.value.isInitialized) {
+      return Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Starting camera…', style: TextStyle(color: Colors.white70)),
+          ],
+        ),
+      );
+    }
+    return CameraPreview(controller);
   }
 
   Widget _readout() {
@@ -156,6 +202,20 @@ class _SensorPageState extends State<SensorPage> {
                   fontWeight: rerouting ? FontWeight.bold : FontWeight.normal)),
           Text(rerouting ? 'above planner threshold — expect reroute' : 'below threshold (10)',
               style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Row(
+            children: [
+              Icon(_vehicleInView ? Icons.directions_car : Icons.no_transfer,
+                  size: 14, color: _vehicleInView ? Colors.tealAccent : Colors.white38),
+              const SizedBox(width: 4),
+              Text(
+                _vehicleInView
+                    ? 'vehicle recognised in view'
+                    : (_gateOnly ? 'no vehicle recognised — not counting' : 'gate off'),
+                style: TextStyle(
+                    color: _vehicleInView ? Colors.tealAccent : Colors.white38, fontSize: 11),
+              ),
+            ],
+          ),
           if (_lastLabels.isNotEmpty)
             SizedBox(
               width: 240,
@@ -217,11 +277,13 @@ class _SensorPageState extends State<SensorPage> {
         preset: _preset,
         intervalSeconds: _intervalSeconds,
         counter: _counter,
-        onApply: (config, preset, interval) {
+        gateOnly: _gateOnly,
+        onApply: (config, preset, interval, gateOnly) {
           setState(() {
             _config = config;
             _preset = preset;
             _intervalSeconds = interval;
+            _gateOnly = gateOnly;
           });
           if (_reporting) _toggleReporting(true); // restart the timer at the new interval
         },
@@ -236,13 +298,15 @@ class _SettingsSheet extends StatefulWidget {
   final String preset;
   final int intervalSeconds;
   final CarCounter counter;
-  final void Function(IntersectionConfig, String, int) onApply;
+  final bool gateOnly;
+  final void Function(IntersectionConfig, String, int, bool) onApply;
 
   const _SettingsSheet({
     required this.config,
     required this.preset,
     required this.intervalSeconds,
     required this.counter,
+    required this.gateOnly,
     required this.onApply,
   });
 
@@ -257,7 +321,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   late int _perCar;
   late int _interval;
   late double _minConfidence;
-  late bool _requireLabel;
+  late bool _gateOnly;
 
   @override
   void initState() {
@@ -268,7 +332,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     _perCar = widget.config.densityPerCar;
     _interval = widget.intervalSeconds;
     _minConfidence = widget.counter.minConfidence;
-    _requireLabel = widget.counter.requireVehicleLabel;
+    _gateOnly = widget.gateOnly;
   }
 
   @override
@@ -341,14 +405,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Require a vehicle label'),
+              title: const Text('Only count when a vehicle is recognised'),
               subtitle: const Text(
-                "Leave off with ML Kit's base model — it returns coarse categories "
-                'and rarely labels a model car "car".',
+                'The image labeler must see a vehicle-ish label (Car, Vehicle, Wheel, '
+                "Toy...) before objects count. Turn off to count whatever is in view.",
                 style: TextStyle(fontSize: 11),
               ),
-              value: _requireLabel,
-              onChanged: (v) => setState(() => _requireLabel = v),
+              value: _gateOnly,
+              onChanged: (v) => setState(() => _gateOnly = v),
             ),
             const SizedBox(height: 8),
             Row(
@@ -364,7 +428,6 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                     final coords = kRoutePresets[_preset]!;
                     widget.counter
                       ..minConfidence = _minConfidence
-                      ..requireVehicleLabel = _requireLabel
                       ..reset();
                     widget.onApply(
                       widget.config.copyWith(
@@ -376,6 +439,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                       ),
                       _preset,
                       _interval,
+                      _gateOnly,
                     );
                     Navigator.pop(context);
                   },

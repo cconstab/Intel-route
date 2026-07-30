@@ -44,30 +44,50 @@ reverts by itself. **Clear** sends a density of 0 immediately.
 Watch the effect on the operator console (`http://127.0.0.1:7865`), the commuter app,
 or in `/tmp/stack/planner.log`.
 
-## Detection notes (read before demoing)
+## How detection works
 
-Detection uses [`flutter_smart_scanner`](https://pub.dev/packages/flutter_smart_scanner),
-a wrapper over Google ML Kit's object detector (stream mode, multiple objects,
-tracking). Two honest caveats:
+We own the camera pipeline (`camera` + ML Kit) rather than using a pre-built scanner
+widget, because two models have to see each frame:
 
-- **ML Kit's base model classifies coarsely** — "Home good", "Fashion good",
-  "Unknown" — so it will rarely label a model car *"car"*. The signal we use is
-  therefore the **count of tracked objects**, which is exactly what a junction camera
-  contributes (vehicle density). "Require a vehicle label" is off by default for this
-  reason; turn it on only with a vehicle-aware model (see below).
-- **Counts flicker** as the tracker drops and re-acquires objects, so the reported
-  count is the **maximum over a 2 s window** — a briefly occluded car still counts.
+| Model | Gives us | Used for |
+|---|---|---|
+| ML Kit **object detector** (stream, multi-object, tracking) | bounding boxes | the **count** → traffic density |
+| ML Kit **image labeler** (base model, 400+ labels) | semantic labels — `Vehicle`, `Car`, `Wheel`, `Toy`… | the **gate**: are we even looking at cars? |
 
-To get a true `car` class, swap the detector for a COCO/YOLO model (e.g.
-`ultralytics_yolo`) and keep everything else: only the input to
-`car_counter.dart` changes, and the label filter then becomes meaningful.
+The object detector alone was not enough: its base model only returns coarse
+categories (`Home good`, `Fashion good`, `Unknown`) and never says "car", so a desk
+full of mugs read as congestion. The labeler supplies the missing semantics, and
+**"Only count when a vehicle is recognised"** (on by default) makes objects count only
+while a vehicle-ish label is present. The readout shows the live gate state and the
+top labels, so you can see exactly what the model thinks.
+
+Neither model ships as an asset — nothing to license or bundle. Frames are sampled
+(every 6th by default) and skipped while inference is busy, so the preview stays
+smooth.
+
+### If you want true per-object car labels
+
+This pipeline makes both upgrades possible, in increasing order of effort:
+
+1. **Custom TFLite classifier** via `LocalObjectDetectorOptions(modelPath: ...)` —
+   ML Kit then classifies each detected box with your model, giving per-object "car"
+   labels. Choose a permissively licensed model (e.g. an EfficientDet-Lite or
+   MobileNet variant, Apache-2.0).
+2. **A COCO/YOLO detector** (e.g. `ultralytics_yolo`) — best accuracy, real `car`,
+   `truck`, `bus` classes. **Licensing caveat:** Ultralytics YOLOv8/v11 are
+   **AGPL-3.0**, which is usually unsuitable for a commercial product without a
+   commercial licence. Check before shipping.
+
+Either way only the detector changes: `car_counter.dart` consumes
+`List<Detection>(label, confidence)`, and the report/publish path is untouched.
 
 ## Layout
 
 | File | Role |
 |---|---|
 | `lib/main.dart` | App shell + atSign/root-server sign-in gate |
-| `lib/sensor_page.dart` | Camera, live readout, settings, publish controls |
+| `lib/sensor_page.dart` | Camera preview, live readout, settings, publish controls |
+| `lib/vehicle_detector.dart` | Camera → ML Kit object detection + image labeling |
 | `lib/traffic_report.dart` | The wire contract (AtKey + payload) — Flutter-free |
 | `lib/car_counter.dart` | Confidence filter, optional label gate, window smoothing |
 | `test/traffic_report_test.dart` | Pins the payload/key contract to `change_route.dart` |

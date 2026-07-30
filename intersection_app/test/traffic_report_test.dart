@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:at_client/at_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intersection_app/car_counter.dart';
+import 'package:intersection_app/vehicle_detector.dart';
 import 'package:intersection_app/traffic_report.dart';
 
 void main() {
@@ -86,6 +87,27 @@ void main() {
       expect(counter.smoothedCount(now: t0.add(const Duration(seconds: 1))), 2);
       // once the window passes with no frames, it falls back to zero
       expect(counter.smoothedCount(now: t0.add(const Duration(seconds: 5))), 0);
+    });
+  });
+
+  group('vehicle gate (ML Kit image labels)', () {
+    test('recognises vehicle-ish labels above the confidence floor', () {
+      expect(
+          VehicleDetector.looksLikeVehicle(
+              [const Detection('Vehicle', 0.81), const Detection('Sky', 0.9)], 0.5),
+          isTrue);
+      expect(VehicleDetector.looksLikeVehicle([const Detection('Toy', 0.7)], 0.5), isTrue);
+    });
+
+    test('ignores low-confidence vehicle labels', () {
+      expect(VehicleDetector.looksLikeVehicle([const Detection('Car', 0.2)], 0.5), isFalse);
+    });
+
+    test('a desk of non-vehicles does not open the gate', () {
+      expect(
+          VehicleDetector.looksLikeVehicle(
+              [const Detection('Mug', 0.95), const Detection('Table', 0.9)], 0.5),
+          isFalse);
     });
   });
 }
