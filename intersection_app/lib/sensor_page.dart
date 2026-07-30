@@ -76,7 +76,11 @@ class _SensorPageState extends State<SensorPage> {
     // so a desk full of mugs doesn't report congestion.
     final counted = (_gateOnly && !frame.vehicleInView) ? const <Detection>[] : frame.objects;
     _counter.addFrame(counted);
-    final cars = _counter.smoothedCount();
+    var cars = _counter.smoothedCount();
+    // The labeler looks at the whole frame and often recognises a vehicle that the box
+    // detector misses (a small model car on a desk). Without this, the gate says
+    // "vehicle recognised" while the count stays 0 and nothing is ever reported.
+    if (cars == 0 && frame.vehicleInView) cars = 1;
     final labels = frame.frameLabels
         .take(3)
         .map((l) => '${l.label} ${(l.confidence * 100).round()}%')

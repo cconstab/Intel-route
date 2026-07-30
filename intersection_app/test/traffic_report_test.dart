@@ -59,10 +59,12 @@ void main() {
   });
 
   group('density mapping', () {
-    test('cars are multiplied so a few model cars can cross the threshold of 10', () {
+    test('a single recognised car already crosses the planner threshold', () {
       expect(reporter.densityFor(config, 0), 0);
-      expect(reporter.densityFor(config, 2), 12); // 2 cars x 6 -> reroute
-      expect(reporter.densityFor(config, 1), 6); // 1 car -> below threshold
+      // one recognised car must already cross the planner's threshold of 10
+      expect(reporter.densityFor(config, 1), 15);
+      // and two match the density the proven CLI demo sends
+      expect(reporter.densityFor(config, 2), 30);
     });
   });
 

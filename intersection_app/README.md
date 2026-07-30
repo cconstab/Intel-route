@@ -33,9 +33,9 @@ Two settings matter, both under the **tune** icon:
    it is currently planning**. Leave this on the default
    `berkeley-oakland-i880 (midpoint — proven)` preset; a report anywhere else is
    delivered and then ignored.
-2. **Density per detected car** (default 6) — the planner reroutes above a density of
-   **10**, so a couple of model cars needs a multiplier to cross it. 2 cars × 6 = 12 →
-   reroute.
+2. **Density per detected car** (default 15) — the planner reroutes above a density of
+   **10**, so one recognised car already reports 15 (and two report 30, the density the
+   proven CLI demo sends).
 
 Turn **Reporting** on and the app sends every few seconds. Each report carries a
 60 s TTL, so when you take the cars away the planner's cache expires and the route

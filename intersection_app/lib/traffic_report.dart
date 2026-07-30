@@ -38,7 +38,7 @@ class IntersectionConfig {
     this.latitude = 37.54812,
     this.longitude = -122.0241,
     this.plannerAtSign = '@smartroute_planner',
-    this.densityPerCar = 6,
+    this.densityPerCar = 15,
     this.ttlMillis = 60000,
   });
 
