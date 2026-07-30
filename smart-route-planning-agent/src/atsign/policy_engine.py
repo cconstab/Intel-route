@@ -165,14 +165,22 @@ def main(argv):
             print("[policy] WARNING: rules were not fully persisted, so a restart may "
                   f"not reflect this change: {', '.join(failed)}")
 
+    mirror_failed = [False]  # so a heartbeat that cannot reach the admin logs once, not forever
+
     def publish():
         payload = json.dumps({"grants": sorted(granted), "issued_by": me_str})
         pub.notify(planner, "policy", payload)
         # The admin console renders what the engine actually holds rather than assuming.
         try:
             pub.notify(admin_atsign, "policy", payload)
+            if mirror_failed[0]:
+                print(f"[policy] rules are reaching {admin_atsign} again")
+                mirror_failed[0] = False
         except Exception as e:
-            print(f"[policy] could not mirror rules to {admin_atsign}: {e}")
+            if not mirror_failed[0]:
+                print(f"[policy] could not mirror rules to {admin_atsign}, so its page "
+                      f"will not update: {e}")
+                mirror_failed[0] = True
 
     last_ver = [0]  # ignore stale/replayed admin notifications (monotonic version guard)
 
