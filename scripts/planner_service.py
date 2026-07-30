@@ -28,13 +28,18 @@ from atsign.atsign_io import AtPublisher, AtSubscriber  # noqa: E402
 
 POLICY = roles.atsign_for("policy")
 ALLOW: set = set()
+_policy_at = [0.0]  # monotonic time of the last policy record; 0 = never received one
 _denied_seen: dict = {}  # source -> last-logged monotonic time (throttle denial spam)
+# The engine republishes every 30s, so nothing for this long means this planner is
+# enforcing a rule set the engine no longer holds.
+POLICY_STALE_S = 90.0
 
 
 def on_record(frm, key, value, raw):
     kn = wire.key_name_from_atkey(key)
     if kn == "policy":
         if frm == POLICY:
+            _policy_at[0] = time.monotonic()
             new_allow = set(json.loads(value).get("grants", []))
             revoked = ALLOW - new_allow
             ALLOW.clear()
@@ -53,7 +58,18 @@ def on_record(frm, key, value, raw):
         now = time.monotonic()
         if now - _denied_seen.get(frm, 0) > 10:
             _denied_seen[frm] = now
-            print(f"[planner-service] DENIED {kn} from {frm} (not granted — dropped)", flush=True)
+            # Say how old the rule set is. A denial against a stale policy looks identical
+            # to a correct one, which is exactly how a dead or unheard engine hides.
+            if not _policy_at[0]:
+                provenance = "no policy has ever been received"
+            else:
+                age = int(now - _policy_at[0])
+                provenance = f"policy is {age}s old, {len(ALLOW)} publisher(s) granted"
+                if age > POLICY_STALE_S:
+                    provenance += (" — STALE: the engine publishes every 30s, so this "
+                                   "denial may be wrong; check the policy engine")
+            print(f"[planner-service] DENIED {kn} from {frm} "
+                  f"(not granted — dropped; {provenance})", flush=True)
         return
     if kn == "live_traffic":
         cache.put_live_traffic(frm, wire.decode(kn, value))
