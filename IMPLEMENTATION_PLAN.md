@@ -281,6 +281,12 @@ falling back to `--grant`; a rule that fails to persist is reported instead of s
 diverging from what is being enforced; and a record another atSign *shares* with the
 engine can never be read back as a rule.
 
+`start_stack.sh` also **verifies what it started**: it checks each service ~12s in and
+tails the log of any that died, rather than printing "stack up" unconditionally. A policy
+engine that dies at startup is indistinguishable, from the outside, from a policy that is
+never applied — and its log was previously written to `policy.log`, which no
+troubleshooting instruction mentioned. It is now `policy_engine.log`.
+
 A rule change is also **confirmed rather than assumed**: the admin treats a toggle as a
 request, re-pushes it if the engine has not mirrored it back, and then reports that it was
 not applied — quoting the atServer's delivery verdict, which distinguishes "never arrived"

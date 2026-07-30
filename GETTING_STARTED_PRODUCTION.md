@@ -152,6 +152,11 @@ worth knowing:
 - The engine **refuses to start** if it cannot read its own rules, rather than falling
   back to `--grant` and silently re-authorising a publisher you revoked. `--grant`
   applies only to an atSign that has never held rules.
+- **First check that the engine is actually running.** `start_stack.sh` now verifies every
+  service ~12s after launch and prints `ok`/`FAILED` per name, tailing the log of anything
+  that died — it used to announce "stack up" regardless. The engine's log is
+  `/tmp/stack/policy_engine.log`. With no engine there is no rule set at all, and the admin
+  page waits forever.
 - If the page says **"Waiting for the engine's current rule set…"** for more than ~45s it
   now explains itself in a banner: whether a policy record arrived from an unexpected
   sender (a profile mismatch between admin and engine), or nothing arrived at all. The
