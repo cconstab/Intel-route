@@ -36,14 +36,26 @@ package). Actions taken in this repo:
 
 - **first-contact decrypt drop** — new sender's first notification dropped
 - **monitor resume on reconnect** — `last_received_time` can't be seeded after client recreate
-- **long-lived "Failed to decrypt shared_key…"** — ROOT-CAUSED (2026-07-30): the
-  sender's stored copy of the shared key becomes unreadable ("Ciphertext length must be
-  equal to key size"), so every later send to that recipient fails identically and a
-  restart re-reads the same bad record. Reproduced by corrupting the record
-  (`validation/live_shared_key_repair_test.py`). Worked around in this repo by deleting
-  both copies so the SDK mints a fresh pair (`AtPublisher._repair_shared_key`, plus
-  `scripts/repair_shared_key.py` for manual repair). Worth an upstream fix: the SDK
-  should treat an undecryptable shared key as absent and recreate it.
+- **"Failed to decrypt shared_key… Ciphertext length must be equal to key size"** — has
+  TWO causes; a restart tells them apart.
+  1. **Connection desynchronisation (the common one).** After a read times out the
+     abandoned reply stays buffered, so every later command on that connection reads the
+     PREVIOUS command's answer; a shared-key lookup then returns a non-ciphertext.
+     Nothing is wrong with the stored record and **reconnecting clears it** — which is why
+     restarting the app fixed it in the field. Proved directly: after an abandoned read,
+     `llookup:publickey@bravo` returned the earlier `shared_key` reply
+     (`validation/live_desync_test.py`). Our fix: never reuse a client after a command
+     failure — mark it stale even when the rebuild fails, and always try a fresh
+     connection before concluding anything about the record
+     (`validation/live_desync_recovery_test.py`).
+     Worth upstreaming: `execute_command` should mark a connection unusable after an
+     abandoned read. Offered in PR #544's description.
+  2. **A genuinely damaged record** (truncated write). Permanent — a restart re-reads it.
+     Reproduced by corrupting the value (`validation/live_shared_key_repair_test.py`);
+     repaired by deleting both copies (`AtPublisher._repair_shared_key`, and
+     `scripts/repair_shared_key.py` by hand). Upstream fix proposed in
+     [#544](https://github.com/atsign-foundation/at_python/pull/544), scoped to this case
+     only.
 - **verb builders drop the namespace for self/public keys** — cross-SDK naming mismatch
 - (Dart-side, separate repo) **`SelfKeyEncryption` zero-IV branch** — dead code / defense-in-depth; real risk is legacy zero-IV self data at rest
 

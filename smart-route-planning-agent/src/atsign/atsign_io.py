@@ -168,9 +168,17 @@ class AtPublisher:
 
     def _notify_once(self, to: str, key_name: str, value: str,
                      namespace: str | None, ttl_ms: int) -> str:
-        """One send, rebuilding the client on first failure (or if it was abandoned)."""
+        """One send, escalating: retry, then a fresh client, then repair the shared key.
+
+        A read timeout leaves the abandoned reply in the socket, so every later command
+        on that connection reads the PREVIOUS command's answer. Reading a shared key
+        then yields a non-ciphertext and reports exactly the same error as a genuinely
+        damaged record — which is why a restart clears it. So a fresh connection is
+        always tried BEFORE concluding the stored key is damaged; deleting it on a
+        desynchronised read would rotate a perfectly good key for both parties.
+        """
         last: Exception | None = None
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 if self._stale:
                     self._stale = False
@@ -182,18 +190,23 @@ class AtPublisher:
                 return self.client.notify(sk, value)
             except Exception as e:
                 last = e
-                if attempt == 0:
-                    print(f"[publisher {self.atsign}] notify to {to} failed ({e}); "
-                          f"rebuilding client and retrying", flush=True)
-                    # A corrupt shared key never fixes itself: clear it before retrying.
-                    if self._is_corrupt_shared_key(e):
-                        self._repair_shared_key(to)
-                    time.sleep(1)  # let the old connection settle before a fresh one
-                    try:
-                        self.client = self._new_client()
-                    except Exception as ce:
-                        print(f"[publisher {self.atsign}] reconnect failed: {ce}", flush=True)
-                        raise
+                if attempt == 2:
+                    break
+                print(f"[publisher {self.atsign}] notify to {to} failed ({e}); "
+                      f"rebuilding client and retrying", flush=True)
+                # Only on the SECOND identical shared-key failure — i.e. it persisted
+                # across a fresh connection — is the stored record actually damaged.
+                if attempt == 1 and self._is_corrupt_shared_key(e):
+                    self._repair_shared_key(to)
+                time.sleep(1)  # let the old connection settle before a fresh one
+                try:
+                    self.client = self._new_client()
+                except Exception as ce:
+                    # The old client may be desynchronised; never hand it back for
+                    # reuse, or every later send repeats this failure until a restart.
+                    self._stale = True
+                    print(f"[publisher {self.atsign}] reconnect failed: {ce}", flush=True)
+                    raise
         raise last  # type: ignore[misc]
 
 
