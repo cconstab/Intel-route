@@ -27,6 +27,7 @@ from at_client.common import AtSign
 from at_client.common.keys import SelfKey
 from at_client.connections import Address
 from at_client.exception.atexception import AtKeyNotFoundException
+from at_client.util.verbbuilder import ScanVerbBuilder
 
 from atsign import roles, wire
 from atsign.atsign_io import AtPublisher, AtSubscriber
@@ -47,6 +48,7 @@ class AtKeyPolicyStore:
     # Written once so an empty rule set ("everything revoked") is distinguishable from
     # a store that has never been written.
     _MARKER = "policy_initialised"
+    _RULE_PREFIX = "rule."
 
     def _self_key(self, name: str) -> SelfKey:
         sk = SelfKey(name, self.me)
@@ -54,7 +56,7 @@ class AtKeyPolicyStore:
         return sk
 
     def _key(self, subject: str) -> SelfKey:
-        return self._self_key(f"rule.{subject.lstrip('@')}")
+        return self._self_key(f"{self._RULE_PREFIX}{subject.lstrip('@')}")
 
     def is_initialised(self) -> bool:
         """Whether rules have ever been written.
@@ -77,16 +79,19 @@ class AtKeyPolicyStore:
     def load(self) -> set:
         """The subjects holding an allow rule. Presence is the grant; revoke deletes."""
         subjects = set()
-        response = self.client.secondary_connection.execute_command("scan:rule.", True)
+        # Built by the SDK rather than by hand: the scan verb takes its regex after a
+        # space, and "scan:rule." is a syntax error the server rejects with AT0003.
+        command = ScanVerbBuilder().set_regex(f"{self._RULE_PREFIX}").build()
+        response = self.client.secondary_connection.execute_command(command, True)
         for entry in json.loads(response.get_raw_data_response() or "[]"):
             # Only the engine's OWN records count. Anything another atSign shared with us
             # is scanned as "@me:rule.x@them" or "cached:@me:...", so taking the text
             # before the first '@' and requiring a bare "rule." prefix rejects it: a
             # third party must not be able to inject a rule by sharing a key.
             name = str(entry).split("@", 1)[0]
-            if not name.startswith("rule."):
+            if not name.startswith(self._RULE_PREFIX):
                 continue
-            subject = name[len("rule."):]
+            subject = name[len(self._RULE_PREFIX):]
             suffix = "." + roles.namespace()
             if subject.endswith(suffix):
                 subject = subject[:-len(suffix)]

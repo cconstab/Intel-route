@@ -294,7 +294,11 @@ from "arrived and ignored". The engine, in turn, now logs the two cases it used 
 silence: a rule set rejected by the monotonic version guard, and publishers it does not
 know. A silently discarded change was what made this class of bug so hard to see.
 
-Regression test (network-free): `validation/test_policy_persistence.py`.
+Regression test (network-free): `validation/test_policy_persistence.py`. Its fake secondary
+validates the scan command against the SDK's own `ScanVerbBuilder` rather than against an
+assumption — an earlier version accepted a hand-built `scan:rule.`, which a real server
+rejects with `AT0003 Invalid syntax` because the regex follows a space, so the suite passed
+green while the engine could not start at all.
 
 ### Upstream contributions
 

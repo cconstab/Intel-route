@@ -15,6 +15,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "smart-route-planning-agent", "src"))
 
 from at_client.exception.atexception import AtKeyNotFoundException  # noqa: E402
+from at_client.util.verbbuilder import ScanVerbBuilder  # noqa: E402
+
+from at_client.exception.atexception import AtInvalidSyntaxException  # noqa: E402
 
 from atsign import roles  # noqa: E402
 from atsign.policy_engine import AtKeyPolicyStore, initial_grants  # noqa: E402
@@ -31,15 +34,24 @@ class FakeReply:
 
 
 class FakeConnection:
-    """Answers scan the way a secondary does: full key strings, owner atSign included."""
+    """Answers scan the way a secondary does: full key strings, owner atSign included.
+
+    The command is validated against what the SDK's own builder produces. An earlier
+    version of this fake accepted a hand-built "scan:rule." — which a real server rejects
+    with AT0003 Invalid syntax, because the regex follows a space — so the test passed
+    while the engine could not start at all.
+    """
 
     def __init__(self, records, owner):
         self.records = records
         self.owner = owner
 
     def execute_command(self, command, _raise=True):
-        assert command.startswith("scan:"), command
-        pattern = command[len("scan:"):]
+        expected = ScanVerbBuilder().set_regex("rule.").build()
+        if command != expected:
+            raise AtInvalidSyntaxException(
+                f"AT0003-Invalid syntax : Invalid syntax. {command}")
+        pattern = command.split(" ", 1)[1]
         matched = [name if "@" in name else f"{name}@{self.owner.lstrip('@')}"
                    for name in self.records if pattern in name]
         return FakeReply(str(matched).replace("'", '"'))
@@ -146,6 +158,16 @@ def main():
     grants, _ = initial_grants(store, seed, PUBLISHERS)
     assert grants == {"@weather_feed"}, grants
     print("unknown subject    -> dropped, not authorized")
+
+    # 9. The scan command must be the SDK's, not a hand-built string. A real server
+    #    answers AT0003 Invalid syntax otherwise, and the engine then refuses to start.
+    assert ScanVerbBuilder().set_regex("rule.").build() == "scan rule.", "scan syntax moved"
+    try:
+        client.secondary_connection.execute_command("scan:rule.", True)
+        raise AssertionError("a hand-built 'scan:rule.' must be rejected, as a server does")
+    except AtInvalidSyntaxException:
+        pass
+    print("scan command       -> built by the SDK; a hand-built one is rejected")
 
     print("\nPASS: rules are read back from the store, so revocations survive a restart.")
 
