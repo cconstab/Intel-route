@@ -25,6 +25,18 @@ environment, or one of your registered `@…intxn_*` atSigns), choosing the matc
 **root server** in the sign-in dialog — `root.atsign.org` for production or
 `vip.ve.atsign.zone:64` for the local ephemeral environment.
 
+## Settings persist with your atSign
+
+Everything under the tune icon is saved into **the atSign's own keystore as a self key**
+(`sensor_settings.smartroute@<your atSign>`), encrypted with that atSign's key and synced
+to its atServer. So the configuration follows the *identity*, not the handset: reinstall
+the app or move to another phone, sign in, and the planner atSign, location, multiplier
+and thresholds are already there.
+
+Settings are restored **before** reporting arms, so the first report of a session never
+goes to a default planner atSign you had already corrected. A self key is readable only
+by its owner — nothing is shared and nothing is stored in the clear.
+
 ## Making a reroute actually happen
 
 Two settings matter, both under the **tune** icon:
@@ -106,6 +118,8 @@ Either way only the detector changes: `car_counter.dart` consumes
 | `lib/vehicle_detector.dart` | Camera (front/rear switchable) → ML Kit object detection + image labeling |
 | `lib/traffic_report.dart` | The wire contract (AtKey + payload) — Flutter-free |
 | `lib/car_counter.dart` | Confidence filter, optional label gate, window smoothing |
+| `lib/sensor_settings.dart` | The configuration value + its JSON encoding (Flutter-free) |
+| `lib/settings_store.dart` | Loads/saves it as a self key in the atSign's keystore |
 | `test/traffic_report_test.dart` | Pins the payload/key contract to `change_route.dart` |
 
 `flutter test` runs the contract tests with no device attached.

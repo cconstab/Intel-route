@@ -136,8 +136,10 @@ cd intersection_app && flutter run   # a phone AS an intersection (needs a real 
 ```
 
 The intersection app replaces a simulated publisher with a real sensor: point it at model
-cars and the planner reroutes. See [intersection_app/README.md](intersection_app/README.md)
-for the density multiplier and on-route location presets that make a reroute fire.
+cars and the planner reroutes. Its settings are stored as a **self key in the atSign's own
+keystore**, so they follow the identity rather than the device. See
+[intersection_app/README.md](intersection_app/README.md) for the density multiplier and
+on-route location presets that make a reroute fire.
 
 ## Status
 

@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
 import 'car_counter.dart';
+import 'sensor_settings.dart';
+import 'settings_store.dart';
 import 'vehicle_detector.dart';
 import 'traffic_report.dart';
 
@@ -29,6 +31,7 @@ class _SensorPageState extends State<SensorPage> {
   bool _vehicleInView = false;
   bool _gateOnly = true;  // ignore counts when no vehicle is recognised in view
   late final TrafficReporter _reporter;
+  late final SettingsStore _settingsStore;
   late final String _me;
 
   IntersectionConfig _config = const IntersectionConfig();
@@ -53,8 +56,25 @@ class _SensorPageState extends State<SensorPage> {
     super.initState();
     final atClient = AtClientManager.getInstance().atClient;
     _reporter = TrafficReporter(atClient);
+    _settingsStore = SettingsStore(atClient);
     _me = atClient.getCurrentAtSign() ?? '(unknown)';
-    _startCamera();
+    _restoreThenStart();
+  }
+
+  /// Settings are restored BEFORE reporting arms, so the first report never goes to a
+  /// default planner atSign that the operator already corrected on a previous run.
+  Future<void> _restoreThenStart() async {
+    final saved = await _settingsStore.load();
+    if (mounted) {
+      setState(() {
+        _config = saved.config;
+        _preset = saved.preset;
+        _intervalSeconds = saved.intervalSeconds;
+        _gateOnly = saved.gateOnly;
+        _counter.minConfidence = saved.minConfidence;
+      });
+    }
+    await _startCamera();
   }
 
   Future<void> _startCamera() async {
@@ -69,6 +89,21 @@ class _SensorPageState extends State<SensorPage> {
     } catch (e) {
       if (mounted) setState(() => _cameraError = '$e');
     }
+  }
+
+  /// Save to the atSign's own keystore so the configuration survives a restart.
+  Future<void> _persistSettings() async {
+    final ok = await _settingsStore.save(SensorSettings(
+      config: _config,
+      preset: _preset,
+      intervalSeconds: _intervalSeconds,
+      gateOnly: _gateOnly,
+      minConfidence: _counter.minConfidence,
+    ));
+    if (!mounted) return;
+    setState(() => _status = ok
+        ? 'settings saved to $_me'
+        : 'settings could not be saved (they apply for this session only)');
   }
 
   Future<void> _switchCamera() async {
@@ -371,6 +406,7 @@ class _SensorPageState extends State<SensorPage> {
             _intervalSeconds = interval;
             _gateOnly = gateOnly;
           });
+          _persistSettings();
           if (_reporting) _toggleReporting(true); // restart the timer at the new interval
         },
       ),

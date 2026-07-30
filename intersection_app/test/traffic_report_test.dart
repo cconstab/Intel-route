@@ -10,6 +10,7 @@ import 'package:at_client/at_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intersection_app/car_counter.dart';
 import 'package:intersection_app/vehicle_detector.dart';
+import 'package:intersection_app/sensor_settings.dart';
 import 'package:intersection_app/traffic_report.dart';
 
 void main() {
@@ -102,6 +103,48 @@ void main() {
       expect(counter.smoothedCount(now: t0.add(const Duration(seconds: 1))), 2);
       // once the window passes with no frames, it falls back to zero
       expect(counter.smoothedCount(now: t0.add(const Duration(seconds: 5))), 0);
+    });
+  });
+
+  group('settings persistence', () {
+    test('round-trips every configured field', () {
+      const original = SensorSettings(
+        config: IntersectionConfig(
+          plannerAtSign: '@intc_smartroute_planner',
+          intersectionName: 'Desk demo',
+          latitude: 37.7946,
+          longitude: -122.3999,
+          densityPerCar: 42,
+        ),
+        preset: 'Market St & 1st',
+        intervalSeconds: 9,
+        gateOnly: false,
+        minConfidence: 0.55,
+      );
+      final restored = SensorSettings.decode(original.encode());
+      expect(restored.config.plannerAtSign, '@intc_smartroute_planner');
+      expect(restored.config.intersectionName, 'Desk demo');
+      expect(restored.config.latitude, 37.7946);
+      expect(restored.config.densityPerCar, 42);
+      expect(restored.preset, 'Market St & 1st');
+      expect(restored.intervalSeconds, 9);
+      expect(restored.gateOnly, isFalse);
+      expect(restored.minConfidence, 0.55);
+    });
+
+    test('absent or corrupt storage yields defaults, never a crash', () {
+      for (final stored in [null, '', '   ', 'not json', '[]', '{"latitude":"nope"}']) {
+        final settings = SensorSettings.decode(stored);
+        expect(settings.config.plannerAtSign, const IntersectionConfig().plannerAtSign);
+        expect(settings.config.latitude, const IntersectionConfig().latitude);
+      }
+    });
+
+    test('a partial record keeps the stored fields and defaults the rest', () {
+      final settings = SensorSettings.decode('{"plannerAtSign":"@alpha"}');
+      expect(settings.config.plannerAtSign, '@alpha');
+      expect(settings.config.densityPerCar, const IntersectionConfig().densityPerCar);
+      expect(settings.gateOnly, isTrue);
     });
   });
 
