@@ -198,8 +198,16 @@ def main(argv):
             print(f"[policy] bad admin payload: {e}")
             return
         if ver <= last_ver[0]:
-            return  # stale or replayed — already have a newer rule set
+            # Say so: a silently dropped change looks identical to one that never arrived,
+            # which is what made this hard to diagnose from the operator's side.
+            print(f"[policy] IGNORED admin change: version {ver} is not newer than the "
+                  f"last applied {last_ver[0]} (stale, replayed, or a clock moved back)")
+            return
         last_ver[0] = ver
+        unknown = new_grants - all_publishers
+        if unknown:
+            print(f"[policy] admin named publisher(s) this engine does not know, so they "
+                  f"cannot be authorized: {sorted(unknown)}")
         granted.clear()
         granted.update(new_grants & all_publishers)  # only known publishers
         persist()

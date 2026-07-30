@@ -152,6 +152,16 @@ worth knowing:
 - The engine **refuses to start** if it cannot read its own rules, rather than falling
   back to `--grant` and silently re-authorising a publisher you revoked. `--grant`
   applies only to an atSign that has never held rules.
+- A toggle is a **request**, not a fact. The page shows "Applying…" until the engine
+  mirrors the change back, re-pushes it up to 3 times in case the notification was lost,
+  and then states plainly that it was not applied — including the atServer's verdict on
+  the push, which separates the two causes:
+  - **delivered** → the engine has it and is not acting on it. Look for `IGNORED admin
+    change` in `policy_engine.log` (a version it considered stale); if there is no line at
+    all its listener is not consuming, so restart the policy engine — its rules are
+    persisted, so nothing is lost.
+  - **not delivered** → it never reached the engine: wrong engine atSign for the profile,
+    an unreachable atServer, or a root-domain mismatch between admin and engine.
 - Running `scripts/planner_run.py` or `scripts/onboarding_finale.py` no longer overrides
   the live rule set: they wait for the engine and, in the finale's case, ask it through
   the Policy Admin channel. Only if no engine answers within `POLICY_WAIT_S` (default 35s,
