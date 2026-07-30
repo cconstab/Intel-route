@@ -3,11 +3,18 @@
 """
 Thin wrappers over the Python atSign SDK (atsdk) for this app's pub/sub.
 
-Requires atsdk >= 0.2.70 (which fixed notify() iv_nonce/session_id, shared-key
-notification detection, and disconnect state upstream). What remains here is
-RESILIENCE the SDK does not provide: publisher rebuild-and-retry, subscriber
-monitor-resume across reconnects, and first-contact shared-key pre-warm.
+Requires atsdk >= 0.2.71. What remains here is RESILIENCE the SDK does not provide:
+bounded socket reads, publisher rebuild-and-retry, a monitor liveness watchdog, and
+first-contact shared-key pre-warm.
+
+Why bounded reads and a watchdog: the SDK connects with `settimeout(None)` and reads
+a byte at a time, so when a peer goes silent WITHOUT closing the connection — a
+network change, NAT/firewall timeout, laptop sleep, a frozen server — reads block
+forever and no exception is ever raised. Reconnect logic that waits for an error
+therefore never runs: a publisher hangs mid-notify (freezing its caller's loop) and
+a monitor stops delivering without ever reporting a failure.
 """
+import socket
 import threading
 import time
 from queue import Queue, Empty
@@ -21,34 +28,119 @@ from at_client.connections.notification.atevents import AtEventType
 
 from atsign import roles
 
+# Command/response round trips are fast; well past this the socket is not coming back.
+COMMAND_READ_TIMEOUT_S = 15.0
+# Creating a client does a root lookup, a TLS connect and PKAM auth. Against an
+# unresponsive peer each of those would otherwise block forever.
+CONNECT_TIMEOUT_S = 15.0
+# A publish must never freeze its caller's loop: the SDK can block indefinitely in
+# code we cannot bound from here (see AtPublisher.notify).
+PUBLISH_DEADLINE_S = 25.0
+# The SDK heartbeats the monitor every ~30s and its acks arrive as queue events, so
+# silence across several heartbeats means the connection is dead even if the socket
+# never said so.
+MONITOR_SILENCE_TIMEOUT_S = 90.0
+WATCHDOG_INTERVAL_S = 15.0
+
+
+def _bound_socket_reads(client: AtClient, seconds: float) -> None:
+    """Give a client's command socket a read timeout (the SDK leaves it unbounded).
+
+    Turns an indefinite hang into a socket timeout, which the callers below already
+    treat as a reconnect trigger. Touches a private attribute deliberately: there is
+    no public way to set this, and failing to harden must never break the client.
+    """
+    try:
+        sock = client.secondary_connection._secure_root_socket
+        if sock is not None:
+            sock.settimeout(seconds)
+    except Exception:
+        pass
+
+
+def _new_bounded_client(atsign: AtSign, root: str, queue: Queue | None = None,
+                        verbose: bool = False) -> AtClient:
+    """Create an AtClient whose setup and command socket cannot block forever.
+
+    The constructor's root lookup, TLS connect and PKAM auth all read from sockets
+    that do not exist yet, so they can't be bounded afterwards. A process-wide default
+    timeout, applied only for the duration of construction, bounds them — and the
+    sockets created inside inherit it, which is what we want for command traffic.
+
+    It is deliberately restored immediately: the monitor socket is created later and
+    must be free to idle between heartbeats. Its liveness is handled by the watchdog.
+    """
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(CONNECT_TIMEOUT_S)
+    try:
+        client = AtClient(atsign, root_address=Address.from_string(root),
+                          queue=queue, verbose=verbose)
+    finally:
+        socket.setdefaulttimeout(previous)
+    _bound_socket_reads(client, COMMAND_READ_TIMEOUT_S)
+    return client
+
 
 class AtPublisher:
     """Publishes encrypted records (notifications) to another atSign.
 
-    Resilient: a long-lived publisher's connection/key-cache can go bad after a while
-    ("Failed to decrypt shared_key..." on notify). On a notify failure we rebuild the
-    AtClient once (fresh connection + key cache) and retry, so the planner keeps
-    pushing instead of erroring every cycle until restart.
+    Resilient: reads are bounded (so a silently dead socket raises instead of hanging
+    the caller's loop), and on any notify failure the AtClient is rebuilt once — fresh
+    connection and key cache — and the send retried.
     """
 
     def __init__(self, atsign: str, root: str | None = None, verbose: bool = False):
         self.atsign = AtSign(atsign)
         self._root = root or roles.root()
         self._verbose = verbose
+        self._stale = False  # set when a send was abandoned; forces a fresh client
         self.client = self._new_client()
 
     def _new_client(self) -> AtClient:
-        return AtClient(
-            self.atsign,
-            root_address=Address.from_string(self._root),
-            verbose=self._verbose,
-        )
+        return _new_bounded_client(self.atsign, self._root, verbose=self._verbose)
 
     def notify(self, to: str, key_name: str, value: str,
-               namespace: str | None = None, ttl_ms: int = 60_000) -> str:
+               namespace: str | None = None, ttl_ms: int = 60_000,
+               deadline_s: float = PUBLISH_DEADLINE_S) -> str:
+        """Send one record, guaranteed to return (or raise) within `deadline_s`.
+
+        The send runs on a worker thread because the SDK can block indefinitely in
+        places we cannot bound from here: `AtConnection.connect()` sets
+        `settimeout(None)` explicitly and reads the server's greeting inside connect,
+        so a client rebuild against an unresponsive peer has no timeout of its own.
+        Abandoning a stuck worker (it exits when the socket finally resolves) keeps a
+        caller's loop — e.g. the planner's 8s cycle — alive no matter what.
+        """
+        outcome: dict = {}
+
+        def send():
+            try:
+                outcome["result"] = self._notify_once(to, key_name, value, namespace, ttl_ms)
+            except Exception as e:  # noqa: BLE001 — reported to the caller below
+                outcome["error"] = e
+
+        worker = threading.Thread(target=send, daemon=True)
+        worker.start()
+        worker.join(deadline_s)
+
+        if worker.is_alive():
+            # Stuck in the SDK. Drop this client; the next call builds a fresh one.
+            self._stale = True
+            raise TimeoutError(
+                f"notify to {to} exceeded {deadline_s:.0f}s (peer unresponsive); abandoned")
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["result"]
+
+    def _notify_once(self, to: str, key_name: str, value: str,
+                     namespace: str | None, ttl_ms: int) -> str:
+        """One send, rebuilding the client on first failure (or if it was abandoned)."""
         last: Exception | None = None
         for attempt in range(2):
             try:
+                if self._stale:
+                    self._stale = False
+                    self.client = self._new_client()
                 sk = SharedKey(key_name, self.atsign, AtSign(to))
                 sk.set_namespace(namespace or roles.namespace())
                 sk.set_time_to_live(ttl_ms)
@@ -71,14 +163,19 @@ class AtPublisher:
 class AtSubscriber:
     """Subscribes to a namespace/regex; calls on_record(from_atsign, key, value, raw).
 
-    Resilient: the atsdk monitor can drop (lost heartbeats) and fail to self-recover
-    (`Bad file descriptor`). `start()` therefore loops — it recreates the AtClient and
-    restarts the monitor whenever it dies, so subscribers keep receiving indefinitely.
+    Resilient in two ways:
+      * `start()` loops — when the monitor dies it recreates the AtClient and restarts,
+        resuming from the last notification it processed;
+      * a liveness watchdog force-closes the connection when the monitor goes silent,
+        because a monitor stuck on a dead socket never reports an error and so would
+        never trigger that loop. Heartbeat acks arrive as queue events, so "silence"
+        means the whole connection is gone, not merely that nobody is publishing.
     """
 
     def __init__(self, atsign: str, regex: str,
                  on_record: Callable[[str, str, str, dict], None],
-                 root: str | None = None, verbose: bool = False):
+                 root: str | None = None, verbose: bool = False,
+                 silence_timeout_s: float = MONITOR_SILENCE_TIMEOUT_S):
         self.q: Queue = Queue()
         self.atsign_str = atsign
         self.regex = regex
@@ -87,6 +184,11 @@ class AtSubscriber:
         self.verbose = verbose
         self._running = False
         self.client: AtClient | None = None
+        # Liveness: time of the last event of ANY kind from the monitor (notification,
+        # heartbeat ack, stats). Silence beyond the timeout means a dead connection.
+        self.silence_timeout_s = silence_timeout_s
+        self._last_event_at = time.monotonic()
+        self._watchdog_started = False
         # Highest notification epoch (ms) we've processed. On reconnect we resume the
         # monitor from here (monitor:<epoch> <regex>) instead of the SDK default of 0 —
         # so a notification that arrived during the disconnect window is replayed exactly
@@ -120,8 +222,36 @@ class AtSubscriber:
         except Exception:
             pass
 
+    def _watchdog_tick(self) -> bool:
+        """Force a reconnect if the monitor has gone silent. True if it intervened.
+
+        Closing the monitor connection is what unblocks a read that is stuck on a dead
+        socket; the resulting error ends the monitor, and start()'s loop reconnects.
+        """
+        if time.monotonic() - self._last_event_at <= self.silence_timeout_s:
+            return False
+        print(f"[subscriber {self.atsign_str}] no monitor activity for "
+              f">{self.silence_timeout_s:.0f}s — forcing reconnect", flush=True)
+        self._last_event_at = time.monotonic()  # grace period before checking again
+        client = self.client
+        try:
+            if client is not None and client.monitor_connection is not None:
+                client.monitor_connection.stop_heart_beat()
+                client.monitor_connection.disconnect()
+        except Exception:
+            pass
+        return True
+
+    def _watchdog(self):
+        while self._running:
+            time.sleep(WATCHDOG_INTERVAL_S)
+            try:
+                self._watchdog_tick()
+            except Exception as e:  # never let the watchdog die
+                print(f"[subscriber {self.atsign_str}] watchdog error: {e}", flush=True)
+
     def start(self):
-        """Start one consumer thread, then (re)connect + monitor in a loop forever.
+        """Start the consumer and liveness threads, then (re)connect in a loop forever.
 
         Each (re)connect resumes from the newest notification epoch we've processed
         (atsdk >= 0.2.71: start_monitor(last_received_time=...)), so nothing is missed
@@ -129,14 +259,16 @@ class AtSubscriber:
         """
         self._running = True
         threading.Thread(target=self._consume, daemon=True).start()
+        if not self._watchdog_started:
+            self._watchdog_started = True
+            threading.Thread(target=self._watchdog, daemon=True).start()
         while self._running:
             try:
-                self.client = AtClient(
-                    AtSign(self.atsign_str),
-                    root_address=Address.from_string(self.root),
-                    queue=self.q,
-                    verbose=self.verbose,
-                )
+                self._last_event_at = time.monotonic()  # don't judge a connection before it starts
+                # Bounded setup + command socket; the monitor socket stays free to idle
+                # and is policed by the watchdog instead.
+                self.client = _new_bounded_client(
+                    AtSign(self.atsign_str), self.root, queue=self.q, verbose=self.verbose)
                 resume = f" (resuming from epoch {self._last_epoch})" if self._last_epoch else ""
                 print(f"[subscriber {self.atsign_str}] monitor starting{resume}", flush=True)
                 # blocks until the monitor dies
@@ -190,6 +322,9 @@ class AtSubscriber:
                 ev = self.q.get(timeout=1.0)
             except Empty:
                 continue
+            # Any event proves the connection is alive — including the heartbeat acks
+            # that keep arriving while no one is publishing.
+            self._last_event_at = time.monotonic()
             client = self.client
             if client is None:
                 continue
