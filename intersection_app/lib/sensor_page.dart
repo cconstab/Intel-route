@@ -146,8 +146,10 @@ class _SensorPageState extends State<SensorPage> {
       setState(() {
         _lastOk = ok;
         ok ? _sendOk++ : _sendFailed++;
-        _status = 'density $density -> ${_config.plannerAtSign} '
-            '(${result.notificationStatusEnum.name})';
+        _status = ok
+            ? 'density $density -> ${_config.plannerAtSign} (delivered)'
+            : 'undelivered to ${_config.plannerAtSign} — does that atSign exist on the '
+                'root server you signed in with? Set it under the tune icon.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -284,6 +286,31 @@ class _SensorPageState extends State<SensorPage> {
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ],
             ),
+            if (_sendFailed > 0 && _sendOk == 0)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber, size: 18, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'No report has been delivered yet. The planner atSign is most '
+                        'likely wrong for this root server.',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                    TextButton(onPressed: _openSettings, child: const Text('Fix')),
+                  ],
+                ),
+              ),
             const Divider(height: 12),
             Row(
               children: [
@@ -400,7 +427,9 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               controller: _planner,
               decoration: const InputDecoration(
                 labelText: 'Planner atSign',
-                helperText: 'e.g. @alpha in the test env, or your production planner',
+                helperMaxLines: 3,
+                helperText: 'Must exist on the root server you signed in with. '
+                    'Test env: @alpha. Production: your @…smartroute_planner.',
               ),
             ),
             const SizedBox(height: 12),
