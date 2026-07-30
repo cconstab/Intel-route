@@ -36,7 +36,14 @@ package). Actions taken in this repo:
 
 - **first-contact decrypt drop** — new sender's first notification dropped
 - **monitor resume on reconnect** — `last_received_time` can't be seeded after client recreate
-- **long-lived "Failed to decrypt shared_key…"** — no self-recovery (now diagnosable via the `- e` fix)
+- **long-lived "Failed to decrypt shared_key…"** — ROOT-CAUSED (2026-07-30): the
+  sender's stored copy of the shared key becomes unreadable ("Ciphertext length must be
+  equal to key size"), so every later send to that recipient fails identically and a
+  restart re-reads the same bad record. Reproduced by corrupting the record
+  (`validation/live_shared_key_repair_test.py`). Worked around in this repo by deleting
+  both copies so the SDK mints a fresh pair (`AtPublisher._repair_shared_key`, plus
+  `scripts/repair_shared_key.py` for manual repair). Worth an upstream fix: the SDK
+  should treat an undecryptable shared key as absent and recreate it.
 - **verb builders drop the namespace for self/public keys** — cross-SDK naming mismatch
 - (Dart-side, separate repo) **`SelfKeyEncryption` zero-IV branch** — dead code / defense-in-depth; real risk is legacy zero-IV self data at rest
 

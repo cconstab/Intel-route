@@ -132,6 +132,40 @@ class AtPublisher:
             raise outcome["error"]
         return outcome["result"]
 
+    def _repair_shared_key(self, to: str) -> bool:
+        """Delete a corrupt shared key so the SDK recreates it on the next send.
+
+        The AES key we share with a recipient is stored twice: our own copy
+        (`shared_key.<them>@<us>`) and theirs (`@<them>:shared_key@<us>`). If our copy
+        becomes unreadable — 'Failed to decrypt shared_key... Ciphertext length must be
+        equal to key size', e.g. after a write on a desynchronised connection — every
+        later send to that recipient fails identically, forever, and a restart re-reads
+        the same bad record. Deleting both copies makes the SDK mint a fresh pair.
+        """
+        me = self.atsign.to_string()
+        other = AtSign(to)
+        records = [
+            f"shared_key.{other.without_prefix}{me}",   # our copy
+            f"{other.to_string()}:shared_key{me}",      # the recipient's copy
+        ]
+        repaired = False
+        for record in records:
+            try:
+                self.client.secondary_connection.execute_command(f"delete:{record}", True)
+                repaired = True
+            except Exception as e:
+                print(f"[publisher {self.atsign}] could not delete {record}: {e}", flush=True)
+        if repaired:
+            print(f"[publisher {self.atsign}] deleted the corrupt shared key for {to}; "
+                  f"a fresh one will be created on the next send", flush=True)
+        return repaired
+
+    @staticmethod
+    def _is_corrupt_shared_key(error: Exception) -> bool:
+        text = str(error)
+        return "shared_key" in text and (
+            "Failed to decrypt" in text or "Ciphertext length" in text)
+
     def _notify_once(self, to: str, key_name: str, value: str,
                      namespace: str | None, ttl_ms: int) -> str:
         """One send, rebuilding the client on first failure (or if it was abandoned)."""
@@ -151,6 +185,9 @@ class AtPublisher:
                 if attempt == 0:
                     print(f"[publisher {self.atsign}] notify to {to} failed ({e}); "
                           f"rebuilding client and retrying", flush=True)
+                    # A corrupt shared key never fixes itself: clear it before retrying.
+                    if self._is_corrupt_shared_key(e):
+                        self._repair_shared_key(to)
                     time.sleep(1)  # let the old connection settle before a fresh one
                     try:
                         self.client = self._new_client()
