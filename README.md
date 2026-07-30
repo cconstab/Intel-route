@@ -19,11 +19,12 @@ messaging, and a Flutter commuter app + reused-Gradio operator console are added
 ## Architecture
 
 ```
-cameras ─stream→ intersection agents ─┐
-                 weather feed         ├─notify(encrypted)→ Smart Route Planner ─┬─push→ Commuter app (Flutter)
-                 traffic-trends feed  │   (LangGraph, headless)                 └─push→ Operator console (Gradio)
-                 planned-events feed ─┘            │  asks ↑ RPC
-                                                Policy Engine (default-deny)
+phone camera ──on-device detection──┐   (intersection_app, Flutter)
+cameras ─stream→ intersection agents┤
+                 weather feed       ├─notify(encrypted)→ Smart Route Planner ─┬─push→ Commuter app (Flutter)
+                 traffic-trends feed│   (LangGraph, headless)                 └─push→ Operator console (Gradio)
+                 planned-events feed┘            │  asks ↑ RPC
+                                              Policy Engine (default-deny)
 ```
 
 - Every participant is an **atSign**. Data flows as encrypted notifications under the
@@ -31,6 +32,9 @@ cameras ─stream→ intersection agents ─┐
 - The planner subscribes to all publishers, **policy-checks** each (default-deny), caches
   the records, runs Intel's unmodified graph, and **pushes** the optimal route + reroute
   alerts to the commuter app and operator console.
+- An intersection can be a **phone**: `intersection_app/` counts model cars on-device with
+  ML Kit and publishes the same `live_traffic` record as its own atSign. Video never leaves
+  the device — only a small encrypted count.
 
 ## atSign role map (`config/ee_atsigns.json`)
 
@@ -70,13 +74,15 @@ Dart interoperate (verified in `validation/`).
   `weather_report.py`, `traffic_trends.py`, `planned_events.py` — class + `RouteStatusInterface`
   unchanged; originals kept as `*.intel-orig`.
 - **ADD (new):** `src/atsign/*` (wire, roles, atsign_io, cache, messages, publishers,
-  policy_engine, operator_console), `scripts/*`, `commuter_app/` (Flutter).
+  policy_engine, operator_console), `scripts/*`, `commuter_app/` and `intersection_app/`
+  (Flutter), `dart_client/*` (pure-Dart tools), `validation/*`.
 
 ## Repo layout
 
 ```
 smart-route-planning-agent/   Intel app (sparse clone) + src/atsign/ integration + SWAP'd controllers
 commuter_app/                 Flutter commuter app (at_client_flutter + flutter_map)
+intersection_app/             Flutter intersection sensor: camera + ML Kit -> live_traffic
 scripts/                      onboarding + planner service/subscriber + receivers + run_demo.sh
 dart_client/                  pure-Dart at_client programs: change_route (demo tool) + interop tests
 config/ee_atsigns.json        role -> atSign map
@@ -121,10 +127,28 @@ python scripts/planner_run.py        # single reroute + push
 python scripts/onboarding_finale.py  # a new intersection joins live (policy-gated)
 ```
 
-Flutter app: `cd commuter_app && flutter run` — the sign-in screen lets you pick the
-**root server** (production or the `vip.ve.atsign.zone` test env) and your atSign.
+Flutter apps — both sign-in screens let you pick the **root server** (production or the
+`vip.ve.atsign.zone` test env) and your atSign:
+
+```bash
+cd commuter_app     && flutter run   # the driver's view: route + reroute alerts
+cd intersection_app && flutter run   # a phone AS an intersection (needs a real device)
+```
+
+The intersection app replaces a simulated publisher with a real sensor: point it at model
+cars and the planner reroutes. See [intersection_app/README.md](intersection_app/README.md)
+for the density multiplier and on-route location presets that make a reroute fire.
 
 ## Status
 
-Phases 0–6 verified on the EE; Phase 7 (Flutter) analyzes clean; Phase 8 packaging here.
-See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the per-phase checklist.
+Running end-to-end on both the local ephemeral environment and **real registered
+atSigns** (see [GETTING_STARTED_PRODUCTION.md](GETTING_STARTED_PRODUCTION.md)).
+Phases 0–9 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) are complete, plus:
+
+- **A phone as a real sensor** — `intersection_app/` detects model cars on-device and
+  publishes live traffic reports; verified rerouting the planner from the camera.
+- **Resilience hardening** — bounded publishes, a monitor liveness watchdog and
+  self-healing reconnects, so a network change no longer wedges the stack
+  (reproduced and fixed; see `validation/live_outage_test.py`).
+- **Upstream fixes** — 7 pull requests merged into the Python SDK and released in
+  `atsdk` 0.2.70/0.2.71; see [atsdk-upstream-status.md](atsdk-upstream-status.md).

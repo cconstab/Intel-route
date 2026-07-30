@@ -8,7 +8,7 @@ Records flow under the `smartroute` namespace.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Cam as Roadside cameras
+    participant Cam as Roadside cameras<br/>(or a phone running intersection_app)
     participant I as Intersection agents<br/>@intxn_*
     participant F as Data feeds<br/>@weather/@traffic/@events
     participant POL as Policy engine<br/>@route_policy
@@ -17,7 +17,7 @@ sequenceDiagram
     participant O as Operator console<br/>@route_operator (Gradio)
 
     POL-->>P: policy grant set (identity + role, default-deny)
-    Cam->>I: local camera / sensor feed
+    Cam->>I: local inference (on-device: ML Kit / Scene Intelligence)<br/>video never leaves the site
     I-)P: live_traffic (encrypted notify)
     F-)P: weather / traffic_trends / planned_events (encrypted notify)
     Note over P: authorize sender vs policy<br/>drop if not granted; cache with TTL

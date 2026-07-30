@@ -28,6 +28,15 @@ all in this repo:
   reroute alerts on a map) and the **reused Gradio UI as an operator control-room console**.
 - **A one-command live demo** plus an on-demand incident trigger and a dynamic-onboarding
   finale.
+- **A phone that *is* an intersection** (`intersection_app/`): on-device ML Kit detection
+  counts model cars and publishes the same encrypted `live_traffic` record as its own
+  atSign. Video never leaves the device — only a ~1 KB encrypted count. This closes the
+  loop from real-world sensing to a rerouted driver, with no inbound ports at any hop.
+- **Production hardening**: bounded publishes and a monitor liveness watchdog, so a
+  network change, NAT timeout or sleeping laptop can no longer wedge a service — the
+  failure was reproduced against a frozen atServer and the fix verified the same way.
+- **Seven fixes contributed upstream** to the Python SDK (`atsdk`), merged and released
+  in 0.2.70/0.2.71, plus an asyncio RFC — so the platform itself improved.
 
 ## Proof it works (verified live on a local atServer)
 
@@ -42,6 +51,8 @@ Every claim below was run end-to-end, not asserted:
 | **Default-deny policy is enforced** | An un-granted intersection (`@delta` / `@lima`) was dropped until the Policy Admin authorized it |
 | **A new node joins the live network** | `intxn_downtown` powered on → DENIED → authorized → CACHED, **no restart, no config edit** |
 | Reroute reaches the people | Commuter got a 🚨 REROUTE ALERT; operator console drew the new route on a live map |
+| **A phone camera drives the city** | `intersection_app` detected model cars on-device, published density, and the planner rerouted — the sensing end is real, not simulated |
+| **A network outage no longer wedges it** | With a *frozen* atServer (`docker pause`, so no FIN/RST — a real network change): publishing stayed bounded, the planner loop kept iterating, and both directions healed on their own once the peer returned |
 
 ## The reuse story (the headline)
 

@@ -222,3 +222,50 @@ fallback / "act 1" of the demo.
 - **Atsign provisioning** — vanity vs registered; who owns the service Atsigns long-term.
 - **`atsdk` is Beta** — pin the version; keep the two known fixes (IV, session_id); watch for others.
 - **Commuter request path** — `notify` vs `put`+`get`; confirm planner reaction latency.
+
+
+---
+
+## Beyond Phase 9 — delivered since
+
+Recorded here so the plan matches the repo.
+
+### Real-world sensing: a phone as an intersection (`intersection_app/`)
+
+| Item | Detail |
+|---|---|
+| Goal | Replace a simulated publisher with a real sensor, without touching the planner |
+| Approach | Flutter app; camera → ML Kit **object detection** (boxes → count) + **image labeling** (semantic gate: is it a vehicle?); publishes the same `live_traffic.smartroute` record as its own atSign |
+| Wire contract | Pinned by unit test to `dart_client/bin/change_route.dart`, so the planner needed no change |
+| Demo controls | On-route location presets, density-per-car multiplier (1–50), auto/manual send, Clear, camera switch |
+| Verified | `flutter analyze` clean, 12 tests, Android APK builds, and **live**: model cars in view rerouted the planner |
+| Not covered by CI | Detection quality itself — it needs a physical device (API 24+) |
+
+Upgrade path documented in `intersection_app/README.md`: a per-object custom TFLite
+classifier via `LocalObjectDetectorOptions`, or a COCO/YOLO detector — with the
+Ultralytics AGPL-3.0 licensing caveat called out.
+
+### Resilience: surviving network changes
+
+The stack could stop responding after a network change, NAT timeout or laptop sleep.
+Root cause: the SDK connects with `settimeout(None)` and reads a byte at a time, so a
+peer that goes silent *without closing the connection* blocks reads forever and raises
+nothing — our exception-driven reconnects never fired, and a publish inside the planner's
+loop froze the whole planner.
+
+| Fix | Where |
+|---|---|
+| Publishes bounded by a hard deadline, abandoning a stuck send | `AtPublisher.notify` |
+| Bounded command-socket reads | `atsign_io._bound_socket_reads` |
+| Monitor **liveness watchdog** — heartbeat acks count as liveness, so a quiet namespace is not mistaken for a dead one; true silence force-closes the socket so the reconnect can run | `AtSubscriber` (all subscribers: planner, policy engine, console) |
+| Operator console self-heals a wedged subscriber | `operator_console` watchdog |
+
+Reproduced *and* verified against a frozen atServer (`docker pause` — no FIN/RST, like a
+real network change): `validation/live_outage_test.py`, plus
+`validation/test_subscriber_liveness.py` offline.
+
+### Upstream contributions
+
+Seven fixes merged into `atsign-foundation/at_python` and released in **atsdk 0.2.70 /
+0.2.71**, plus an asyncio RFC (#531) still open. Detail and the keep/remove mapping for
+our remaining workarounds: [atsdk-upstream-status.md](atsdk-upstream-status.md).

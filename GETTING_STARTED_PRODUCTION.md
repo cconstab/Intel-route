@@ -34,7 +34,10 @@ that differ from the EE.
   . .venv/bin/activate
   pip install "atsdk>=0.2.71" pydantic "langgraph==1.0.9" gpxpy "folium==0.14.0" "gradio>=6.7.0"
   ```
-- **Dart ≥ 3.5 / Flutter ≥ 3.41** (for the commuter app, the policy admin, and route tooling).
+- **Dart ≥ 3.5 / Flutter ≥ 3.41** (commuter app, intersection sensor app, policy admin,
+  route tooling). The Flutter apps need a **physical device on Android 7.0 / API 24 or
+  later** — Flutter no longer supports older Android, and the camera and on-device models
+  do not work in a simulator.
 - **The Atsign onboarding CLI** (provides `at_activate`):
   ```bash
   dart pub global activate at_onboarding_cli
@@ -148,7 +151,38 @@ At sign-in: pick the **root.atsign.org (production)** root server, enter your co
 atSign, and load its `.atKeys` (the app's `.atKeys` file login). It will then receive live
 routes and reroute alerts.
 
-## 8. Verify
+## 8. Intersection sensor app (a phone as a real intersection)
+
+Optional, and the most convincing part of a demo: instead of a simulated publisher, a
+phone detects vehicles with its own camera and reports them.
+
+```bash
+cd intersection_app && flutter run     # needs a physical device (Android 7.0+ / iOS)
+```
+
+1. Sign in with an **intersection** atSign (e.g. `@your_intersection_1`), choosing the
+   **root.atsign.org (production)** root server.
+2. Tap the **tune** icon and set **Planner atSign** to your planner
+   (e.g. `@your_planner_atsign`). The shipped default is a placeholder, so reports are
+   `undelivered` until this is set — the app warns and offers a shortcut when that happens.
+3. Leave **Location** on the default preset: the planner only reacts to congestion at a
+   trackpoint of the route it is currently planning.
+4. Point it at some model cars. Reporting arms itself, and the status row shows a
+   `✓ delivered / ✗ failed` tally.
+
+Two things must be true for a reroute, both the same rules as any other publisher:
+
+- the phone's atSign must be a **granted publisher** in the policy engine — it is
+  default-deny, and `/tmp/stack/planner.log` shows
+  `DENIED live_traffic from @… (not granted — dropped)` if it is not. Grant it in the
+  policy admin (`http://127.0.0.1:8090`);
+- reported density must exceed the planner's threshold of **10** — one recognised car
+  reports 15 by default, and the multiplier is adjustable up to 50.
+
+Full detail, including how to swap in a per-object car model, is in
+[intersection_app/README.md](intersection_app/README.md).
+
+## 9. Verify
 
 ```bash
 cd dart_client

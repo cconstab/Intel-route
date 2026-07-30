@@ -128,6 +128,10 @@ intersection, each data feed, the planner, the operator, and each driver. Then:
 
 - **atSign** — a secure digital identity (like `@smartroute_planner`). The unit of
   "who" in the system; it replaces accounts and passwords.
+- **Intersection sensor app** — a phone app that turns any handset into a traffic
+  intersection: its camera recognises vehicles on the spot and sends only a small
+  encrypted count onward. Nothing leaves the device but the number, and the phone is
+  never reachable from the internet.
 - **Edge AI** — software running *at* the intersection (on local cameras) rather than in
   a faraway data center.
 - **Publish / subscribe** — sources announce updates; interested parties receive them
