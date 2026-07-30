@@ -33,6 +33,7 @@ from atsign.atsign_io import AtPublisher, AtSubscriber  # noqa: E402
 
 ALLOW: set = set()
 POLICY_SOURCE = roles.atsign_for("policy")
+POLICY_WAIT_S = float(os.environ.get("POLICY_WAIT_S", 35))  # > the engine's --interval
 
 
 def on_record(frm, key, value, raw):
@@ -67,12 +68,24 @@ def main():
     threading.Thread(target=sub.start, daemon=True).start()
     time.sleep(3)
 
-    # Policy: grant the Market St intersection (default-deny otherwise).
-    AtPublisher(POLICY_SOURCE).notify(
-        me, "policy",
-        json.dumps({"grants": [roles.atsign_for("intxn_market_st")], "issued_by": POLICY_SOURCE}),
-    )
-    wait_for(lambda: ALLOW, "policy")
+    # A running policy engine owns the rule set and republishes it on a heartbeat, so
+    # wait for that. Asserting our own grant here would override the operator's rules in
+    # the running planner until the engine's next heartbeat put them back — which looks
+    # exactly like policy being applied at random.
+    market_st = roles.atsign_for("intxn_market_st")
+    if wait_for(lambda: ALLOW, "the policy engine's rule set", timeout=POLICY_WAIT_S):
+        if market_st not in ALLOW:
+            print(f"[planner] NOTE: the engine has not authorized {market_st}, so the "
+                  "record pushed below will be denied. Authorize intxn_market_st in the "
+                  "Policy Admin to see a reroute.")
+    else:
+        # No engine: this is a standalone run, so seed the grant the demo needs.
+        print("[planner] no policy engine heard from; seeding a demo grant (standalone)")
+        AtPublisher(POLICY_SOURCE).notify(
+            me, "policy",
+            json.dumps({"grants": [market_st], "issued_by": POLICY_SOURCE}),
+        )
+        wait_for(lambda: ALLOW, "policy")
 
     # Find the current shortest route and a real trackpoint on it.
     src, dst = DEFAULT_LOCATIONS[0], DEFAULT_LOCATIONS[-1]

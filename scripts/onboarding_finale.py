@@ -28,6 +28,8 @@ from atsign.atsign_io import AtPublisher, AtSubscriber  # noqa: E402
 
 PLANNER = roles.atsign_for("planner")
 POLICY = roles.atsign_for("policy")
+ADMIN = roles.atsign_for("policy_admin")
+POLICY_WAIT_S = float(os.environ.get("POLICY_WAIT_S", 35))  # > the engine's --interval
 NEW = roles.atsign_for("intxn_downtown")
 ESTABLISHED = [roles.atsign_for(r) for r in ("intxn_market_st", "intxn_5th_ave", "intxn_broadway")]
 
@@ -65,8 +67,18 @@ def publish_downtown():
     AtPublisher(NEW).notify(PLANNER, "live_traffic", wire.encode(rec))
 
 
-def publish_policy(grants):
-    AtPublisher(POLICY).notify(PLANNER, "policy", json.dumps({"grants": grants, "issued_by": POLICY}))
+def publish_policy(grants, via_admin):
+    """Change the rule set.
+
+    With an engine running, ask it as the Policy Admin — which is what Step 2 below
+    claims to do — so the engine's rules stay the single source of truth and survive.
+    Stating a policy directly would be overridden by the engine's next heartbeat.
+    """
+    if via_admin:
+        AtPublisher(ADMIN).notify(POLICY, "admin", json.dumps(
+            {"grants": grants, "version": int(time.time() * 1000)}))
+    else:
+        AtPublisher(POLICY).notify(PLANNER, "policy", json.dumps({"grants": grants, "issued_by": POLICY}))
 
 
 def wait(pred, t=20):
@@ -82,8 +94,14 @@ def main():
     threading.Thread(target=lambda: AtSubscriber(PLANNER, roles.namespace(), on_record).start(), daemon=True).start()
     time.sleep(3)
 
+    # A policy engine republishes the rule set on a heartbeat, so hearing one means it
+    # is running and owns the rules.
+    engine_live = wait(lambda: ALLOW, t=POLICY_WAIT_S)
+    print("[finale] policy engine detected — rule changes go through the Policy Admin"
+          if engine_live else "[finale] no policy engine — stating policy directly (standalone)")
+
     print("\n— Step 0: policy grants only the established intersections —")
-    publish_policy(ESTABLISHED)
+    publish_policy(ESTABLISHED, engine_live)
     wait(lambda: ALLOW == set(ESTABLISHED))
 
     print("\n— Step 1: the NEW intersection powers on and publishes (expect DENIED) —")
@@ -93,7 +111,7 @@ def main():
     step1 = NEW not in cached
 
     print("\n— Step 2: Policy Admin authorizes the new intersection —")
-    publish_policy(ESTABLISHED + [NEW])
+    publish_policy(ESTABLISHED + [NEW], engine_live)
     wait(lambda: NEW in ALLOW)
 
     print("\n— Step 3: the new intersection publishes again (expect CACHED, no restart) —")

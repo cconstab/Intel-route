@@ -57,7 +57,8 @@ Switch profiles with `ATSIGN_PROFILE=ee` (default) or `ATSIGN_PROFILE=vanity`.
 | `weather` | weather feed → planner | `WeatherData` |
 | `traffic_trends` | traffic-trends feed → planner | `TrafficTrendsData` |
 | `planned_events` | events feed → planner | `PlannedEventsData` |
-| `policy` | policy engine → planner | `{grants: [atSign], issued_by}` |
+| `policy` | policy engine → planner **and policy admin** | `{grants: [atSign], issued_by}` |
+| `admin` | policy admin → policy engine | `{grants: [atSign], version}` |
 | `route` | planner → commuter | `RoutePush` (route, distance, reason, rerouted, points) |
 | `status` | planner → operator | `StatusPush` (+ route geometry) |
 | `request` | commuter → planner | `{source, destination}` |

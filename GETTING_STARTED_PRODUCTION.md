@@ -142,6 +142,21 @@ dart run bin/policy_admin.dart --atsign @your_policy_admin_atsign --root-domain 
 > target the local test engine (`@juliet`) — which on the production root comes back
 > `undelivered`. Always export `ATSIGN_PROFILE=vanity` for production.
 
+**Who owns the rule set.** The engine does, in its own encrypted records, so a grant or
+revocation survives a restart of anything. The admin page displays what the engine holds
+and refreshes every few seconds, so a change made elsewhere shows up without a reload;
+until the engine's first message arrives the switches are disabled and the page says so
+(the admin must never state a rule set the engine did not give it). Two consequences
+worth knowing:
+
+- The engine **refuses to start** if it cannot read its own rules, rather than falling
+  back to `--grant` and silently re-authorising a publisher you revoked. `--grant`
+  applies only to an atSign that has never held rules.
+- Running `scripts/planner_run.py` or `scripts/onboarding_finale.py` no longer overrides
+  the live rule set: they wait for the engine and, in the finale's case, ask it through
+  the Policy Admin channel. Only if no engine answers within `POLICY_WAIT_S` (default 35s,
+  set it above the engine's `--interval`) do they state a policy of their own.
+
 ## 7. Commuter Flutter app
 
 ```bash

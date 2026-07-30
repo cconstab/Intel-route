@@ -264,6 +264,25 @@ Reproduced *and* verified against a frozen atServer (`docker pause` — no FIN/R
 real network change): `validation/live_outage_test.py`, plus
 `validation/test_subscriber_liveness.py` offline.
 
+### Policy applied consistently
+
+Symptom: a revoked publisher was sometimes still accepted, and an authorization appeared
+to take effect only after restarting the whole stack. Three separate causes, all of which
+made the rule set ambiguous rather than wrong:
+
+| Cause | Fix |
+|-------|-----|
+| The engine seeded `granted` from `--grant` (all publishers) on every start and never read back the rules it had persisted, so any restart re-authorised a revoked publisher | `initial_grants()` reads the engine's own rule records; `--grant` seeds only an atSign that has never held rules, and an empty set is honoured as "everything revoked" |
+| The admin assumed all-granted and **pushed** that at startup, so starting the stack re-authorised everything | The admin holds no opinion: the engine mirrors its rule set to the admin, and the page renders (and polls) that. Toggling before the engine has spoken is refused |
+| `planner_run.py` and `onboarding_finale.py` published their own `policy` record as the policy atSign, overriding the live rule set until the engine's next heartbeat undid it | Both wait for a running engine; the finale asks it through the Policy Admin channel, which is what its script always claimed to do |
+
+Also hardened while in there: a store that cannot be read stops the engine instead of
+falling back to `--grant`; a rule that fails to persist is reported instead of silently
+diverging from what is being enforced; and a record another atSign *shares* with the
+engine can never be read back as a rule.
+
+Regression test (network-free): `validation/test_policy_persistence.py`.
+
 ### Upstream contributions
 
 Seven fixes merged into `atsign-foundation/at_python` and released in **atsdk 0.2.70 /

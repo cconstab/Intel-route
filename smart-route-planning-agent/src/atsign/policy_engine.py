@@ -26,6 +26,7 @@ from at_client import AtClient
 from at_client.common import AtSign
 from at_client.common.keys import SelfKey
 from at_client.connections import Address
+from at_client.exception.atexception import AtKeyNotFoundException
 
 from atsign import roles, wire
 from atsign.atsign_io import AtPublisher, AtSubscriber
@@ -43,22 +44,77 @@ class AtKeyPolicyStore:
         self.client = client
         self.me = me
 
-    def _key(self, subject: str) -> SelfKey:
-        sk = SelfKey(f"rule.{subject.lstrip('@')}", self.me)
+    # Written once so an empty rule set ("everything revoked") is distinguishable from
+    # a store that has never been written.
+    _MARKER = "policy_initialised"
+
+    def _self_key(self, name: str) -> SelfKey:
+        sk = SelfKey(name, self.me)
         sk.set_namespace(roles.namespace())
         return sk
 
-    def grant(self, subject: str):
+    def _key(self, subject: str) -> SelfKey:
+        return self._self_key(f"rule.{subject.lstrip('@')}")
+
+    def is_initialised(self) -> bool:
+        """Whether rules have ever been written.
+
+        Only a missing marker means "no": any other failure is reported to the caller,
+        because "the store cannot be read" must not be treated as "first run", which
+        would re-grant every publisher.
+        """
         try:
-            self.client.put(self._key(subject), "allow")
-        except Exception as e:
-            print(f"  (store) could not persist grant for {subject}: {e}")
+            self.client.get(self._self_key(self._MARKER))
+            return True
+        except AtKeyNotFoundException:
+            return False
+
+    def mark_initialised(self):
+        # Deliberately not swallowed: an unmarked store looks like a first run on the
+        # next restart, which would re-grant every publisher.
+        self.client.put(self._self_key(self._MARKER), "1")
+
+    def load(self) -> set:
+        """The subjects holding an allow rule. Presence is the grant; revoke deletes."""
+        subjects = set()
+        response = self.client.secondary_connection.execute_command("scan:rule.", True)
+        for entry in json.loads(response.get_raw_data_response() or "[]"):
+            # Only the engine's OWN records count. Anything another atSign shared with us
+            # is scanned as "@me:rule.x@them" or "cached:@me:...", so taking the text
+            # before the first '@' and requiring a bare "rule." prefix rejects it: a
+            # third party must not be able to inject a rule by sharing a key.
+            name = str(entry).split("@", 1)[0]
+            if not name.startswith("rule."):
+                continue
+            subject = name[len("rule."):]
+            suffix = "." + roles.namespace()
+            if subject.endswith(suffix):
+                subject = subject[:-len(suffix)]
+            if subject:
+                subjects.add("@" + subject)
+        return subjects
+
+    def grant(self, subject: str):
+        self.client.put(self._key(subject), "allow")
 
     def revoke(self, subject: str):
         try:
             self.client.delete(self._key(subject))
-        except Exception:
-            pass
+        except AtKeyNotFoundException:
+            pass  # never granted, so nothing to remove
+
+
+def initial_grants(store, seed, known):
+    """The rule set an engine should start from: `(grants, came_from_the_store)`.
+
+    Persisted rules always win, including an empty set — "everything revoked" is a real
+    state and has to survive a restart. `seed` (--grant) applies only to an atSign that
+    has never held rules. Errors are not caught here: an unreadable store must never be
+    mistaken for a first run, which would re-authorise every publisher.
+    """
+    if store.is_initialised():
+        return store.load() & set(known), True
+    return set(seed), False
 
 
 def main(argv):
@@ -81,13 +137,42 @@ def main(argv):
     store = AtKeyPolicyStore(engine, me)
     pub = AtPublisher(me_str)
 
+    # The engine's own rule records are the source of truth: a revocation has to survive
+    # a restart. --grant seeds the first run only, because an empty rule set is itself a
+    # valid state (everything revoked) and must not be mistaken for an unwritten store.
+    try:
+        loaded, from_store = initial_grants(store, granted, all_publishers)
+    except Exception as e:
+        # Refusing to start is the safe outcome: guessing from --grant would silently
+        # re-authorise publishers the operator revoked. The planner keeps enforcing the
+        # last rule set it was given, so default-deny still holds while this is fixed.
+        print(f"[policy] FATAL: the persisted rules could not be read: {e}")
+        print("[policy] refusing to start rather than fall back to --grant")
+        raise SystemExit(2)
+    granted.clear()
+    granted.update(loaded)
+    print(f"[policy] loaded persisted rules -> {sorted(granted)}" if from_store
+          else "[policy] first run on this atSign: seeding rules from --grant")
+
     def persist():
+        failed = []
         for s in all_publishers:
-            (store.grant if s in granted else store.revoke)(s)
+            try:
+                (store.grant if s in granted else store.revoke)(s)
+            except Exception as e:
+                failed.append(f"{s} ({e})")
+        if failed:
+            print("[policy] WARNING: rules were not fully persisted, so a restart may "
+                  f"not reflect this change: {', '.join(failed)}")
 
     def publish():
-        pub.notify(planner, "policy",
-                   json.dumps({"grants": sorted(granted), "issued_by": me_str}))
+        payload = json.dumps({"grants": sorted(granted), "issued_by": me_str})
+        pub.notify(planner, "policy", payload)
+        # The admin console renders what the engine actually holds rather than assuming.
+        try:
+            pub.notify(admin_atsign, "policy", payload)
+        except Exception as e:
+            print(f"[policy] could not mirror rules to {admin_atsign}: {e}")
 
     last_ver = [0]  # ignore stale/replayed admin notifications (monotonic version guard)
 
@@ -115,8 +200,9 @@ def main(argv):
 
     print(f"[policy] engine {me_str}; initial grants {sorted(granted)}")
     persist()
+    store.mark_initialised()
     publish()
-    print(f"[policy] rules persisted as atKeys; published to {planner}")
+    print(f"[policy] rules persisted as atKeys; published to {planner} and {admin_atsign}")
 
     # Listen for admin rule changes from @route_policy_admin (segregation of duties).
     time.sleep(2)  # let the engine/publisher connections settle before a 3rd client
