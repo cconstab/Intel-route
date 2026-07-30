@@ -63,6 +63,9 @@ class VehicleDetector {
   ObjectDetector? _objects;
   ImageLabeler? _labeler;
 
+  List<CameraDescription> _cameras = const [];
+  int _cameraIndex = 0;
+  bool _switching = false;
   bool _busy = false;
   int _frameIndex = 0;
 
@@ -77,15 +80,21 @@ class VehicleDetector {
 
   CameraController? get controller => _camera;
 
+  /// True when the device has more than one camera to switch between.
+  bool get canSwitchCamera => _cameras.length > 1;
+
+  /// Which way the active camera faces (for the UI icon).
+  CameraLensDirection get lensDirection =>
+      _cameras.isEmpty ? CameraLensDirection.back : _cameras[_cameraIndex].lensDirection;
+
   Future<void> start() async {
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) {
+    _cameras = await availableCameras();
+    if (_cameras.isEmpty) {
       throw StateError('no camera available on this device');
     }
-    final back = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.back,
-      orElse: () => cameras.first,
-    );
+    // Prefer the rear camera: that is the one you point at the road.
+    _cameraIndex = _cameras.indexWhere((c) => c.lensDirection == CameraLensDirection.back);
+    if (_cameraIndex < 0) _cameraIndex = 0;
 
     _objects = ObjectDetector(
       options: ObjectDetectorOptions(
@@ -98,22 +107,46 @@ class VehicleDetector {
       ),
     );
     _labeler = ImageLabeler(options: ImageLabelerOptions(confidenceThreshold: 0.4));
+    await _openCamera();
+  }
 
+  Future<void> _openCamera() async {
     // NV21 on Android / BGRA on iOS give a single plane, which is what ML Kit's
     // InputImage.fromBytes expects — avoiding manual YUV conversion.
-    _camera = CameraController(
-      back,
+    final controller = CameraController(
+      _cameras[_cameraIndex],
       ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup:
           Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
     );
-    await _camera!.initialize();
-    await _camera!.startImageStream(_onCameraFrame);
+    await controller.initialize();
+    await controller.startImageStream(_onCameraFrame);
+    _camera = controller;
+  }
+
+  /// Switch to the next camera (front/rear), keeping the ML models loaded.
+  Future<void> switchCamera() async {
+    if (!canSwitchCamera || _switching) return;
+    _switching = true;
+    try {
+      final old = _camera;
+      _camera = null; // the preview shows its spinner while we swap
+      try {
+        await old?.stopImageStream();
+      } catch (_) {
+        // already stopped
+      }
+      await old?.dispose();
+      _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+      await _openCamera();
+    } finally {
+      _switching = false;
+    }
   }
 
   Future<void> _onCameraFrame(CameraImage image) async {
-    if (_busy) return; // still analysing the previous frame
+    if (_busy || _switching) return; // still analysing, or swapping cameras
     if (_frameIndex++ % sampleEveryNthFrame != 0) return;
     final input = _toInputImage(image);
     if (input == null) return;

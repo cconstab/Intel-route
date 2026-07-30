@@ -32,6 +32,7 @@ class CommuterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Smart Route — Commuter',
       theme: ThemeData(colorSchemeSeed: Colors.green, useMaterial3: true),
       home: const AuthScreen(),

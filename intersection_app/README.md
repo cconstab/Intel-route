@@ -103,7 +103,7 @@ Either way only the detector changes: `car_counter.dart` consumes
 |---|---|
 | `lib/main.dart` | App shell + atSign/root-server sign-in gate |
 | `lib/sensor_page.dart` | Camera preview, live readout, settings, publish controls |
-| `lib/vehicle_detector.dart` | Camera → ML Kit object detection + image labeling |
+| `lib/vehicle_detector.dart` | Camera (front/rear switchable) → ML Kit object detection + image labeling |
 | `lib/traffic_report.dart` | The wire contract (AtKey + payload) — Flutter-free |
 | `lib/car_counter.dart` | Confidence filter, optional label gate, window smoothing |
 | `test/traffic_report_test.dart` | Pins the payload/key contract to `change_route.dart` |

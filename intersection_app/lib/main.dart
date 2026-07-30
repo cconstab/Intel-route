@@ -29,6 +29,7 @@ class IntersectionApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Smart Route — Intersection',
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
       home: const AuthScreen(),

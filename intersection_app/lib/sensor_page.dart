@@ -71,6 +71,17 @@ class _SensorPageState extends State<SensorPage> {
     }
   }
 
+  Future<void> _switchCamera() async {
+    setState(() => _cameraReady = false);  // show the spinner during the swap
+    try {
+      await _detector.switchCamera();
+      _counter.reset();  // the new view starts counting fresh
+      if (mounted) setState(() => _cameraReady = true);
+    } catch (e) {
+      if (mounted) setState(() => _cameraError = '$e');
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -168,6 +179,14 @@ class _SensorPageState extends State<SensorPage> {
       appBar: AppBar(
         title: Text('Intersection · $_me'),
         actions: [
+          if (_detector.canSwitchCamera)
+            IconButton(
+              icon: const Icon(Icons.cameraswitch),
+              tooltip: _detector.lensDirection == CameraLensDirection.back
+                  ? 'Switch to front camera'
+                  : 'Switch to rear camera',
+              onPressed: _switchCamera,
+            ),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Settings',
