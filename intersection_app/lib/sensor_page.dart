@@ -41,8 +41,12 @@ class _SensorPageState extends State<SensorPage> {
   int _cars = 0;
   int _boxes = 0;  // raw detector boxes this frame, shown for diagnosis
   String _lastLabels = '';
-  String _status = 'Not reporting yet.';
+  String _status = 'Starting…';
   bool _lastOk = false;
+  int _sendOk = 0;
+  int _sendFailed = 0;
+  int _lastSentDensity = -1;
+  DateTime _lastSendAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -57,7 +61,11 @@ class _SensorPageState extends State<SensorPage> {
     try {
       await _detector.start();
       _frameSub = _detector.frames.listen(_onFrame);
-      if (mounted) setState(() => _cameraReady = true);
+      if (!mounted) return;
+      setState(() => _cameraReady = true);
+      // A sensor's job is to report, so arm it automatically — forgetting the switch
+      // looked exactly like a broken pipeline. The switch remains, to pause.
+      _toggleReporting(true);
     } catch (e) {
       if (mounted) setState(() => _cameraError = '$e');
     }
@@ -96,6 +104,7 @@ class _SensorPageState extends State<SensorPage> {
         _lastLabels = labels;
         _vehicleInView = frame.vehicleInView;
       });
+      _maybeSendOnChange();
     }
   }
 
@@ -113,20 +122,38 @@ class _SensorPageState extends State<SensorPage> {
     }
   }
 
+  /// Report a material change straight away rather than waiting for the next tick —
+  /// a car appearing should move the map now. Throttled so a flickering count cannot
+  /// spam the planner.
+  void _maybeSendOnChange() {
+    if (!_reporting) return;
+    final density = _density;
+    if (density == _lastSentDensity) return;
+    final crossedThreshold = (density > 10) != (_lastSentDensity > 10);
+    final movedALot = (density - _lastSentDensity).abs() >= 15;
+    if (!crossedThreshold && !movedALot) return;
+    if (DateTime.now().difference(_lastSendAt) < const Duration(seconds: 3)) return;
+    _send(density);
+  }
+
   Future<void> _send(int density) async {
+    _lastSentDensity = density;
+    _lastSendAt = DateTime.now();
     try {
       final NotificationResult result = await _reporter.send(_config, density);
       final ok = result.notificationStatusEnum == NotificationStatusEnum.delivered;
       if (!mounted) return;
       setState(() {
         _lastOk = ok;
+        ok ? _sendOk++ : _sendFailed++;
         _status = 'density $density -> ${_config.plannerAtSign} '
-            '(${result.notificationStatusEnum.name}) at ${TimeOfDay.now().format(context)}';
+            '(${result.notificationStatusEnum.name})';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _lastOk = false;
+        _sendFailed++;
         _status = 'send failed: $e';
       });
     }
@@ -253,6 +280,8 @@ class _SensorPageState extends State<SensorPage> {
                     size: 18, color: _lastOk ? Colors.green : Colors.grey),
                 const SizedBox(width: 8),
                 Expanded(child: Text(_status, style: const TextStyle(fontSize: 12))),
+                Text('  ✓$_sendOk ✗$_sendFailed',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ],
             ),
             const Divider(height: 12),
