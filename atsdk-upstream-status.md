@@ -16,6 +16,12 @@ package). Actions taken in this repo:
   retired subscriber leaves no SDK heartbeat behind. Live-verified on the EE.
 - ✅ **kept** what the SDK still doesn't provide: publisher rebuild-and-retry,
   first-contact pre-warm, operator-console watchdog
+- ✅ **[#545](https://github.com/atsign-foundation/at_python/pull/545) merged
+  (2026-07-30)** — `execute_command` discards a connection whose reply was never read.
+  **Not in a release yet:** the newest tag, v0.2.71, predates it (2026-07-08), so the local
+  equivalent in `atsign_io` stays until a release > v0.2.71 ships. Verify with
+  `git tag --contains dca0b1a` in an `at_python` clone, or check the installed
+  `atconnection.py` for a `disconnect()` in `execute_command`'s read-failure path.
 - 🔬 **asyncio RFC open:** [#531](https://github.com/atsign-foundation/at_python/pull/531)
   — draft `at_client.aio` PoC (async monitor streams; would obsolete the remaining
   hardening if adopted)
@@ -30,6 +36,7 @@ package). Actions taken in this repo:
 | [#523](https://github.com/atsign-foundation/at_python/pull/523) | `fix/disconnect-resets-connected` | `disconnect()` always clears `_connected` → monitor can rebuild the socket (issue #8) |
 | [#524](https://github.com/atsign-foundation/at_python/pull/524) | `fix/shared-key-notification-detection` | monitor `to_string()` called — shared-key notifications were mis-typed (**bug #3**) |
 | [#525](https://github.com/atsign-foundation/at_python/pull/525) | `fix/decrypt-error-detail` | shared-key decrypt error interpolates `{e}` (was literal `- e`) |
+| [#545](https://github.com/atsign-foundation/at_python/pull/545) | `fix/discard-connection-on-abandoned-read` | a connection whose reply was never read is discarded, so a queued reply can never be served to a later command (**merged 2026-07-30 — awaiting a release > v0.2.71**) |
 | [#526](https://github.com/atsign-foundation/at_python/pull/526) | `fix/put-get-random-iv` | random IV for stored keys (put/get), Dart-matched; self+shared; iv_nonce via `UpdateVerbBuilder`; cross-SDK interop test + opt-in CI workflow |
 
 ## Issue write-ups filed (no PR yet — need maintainer/design input)
@@ -52,9 +59,10 @@ package). Actions taken in this repo:
   non-ciphertext. The stored record is fine, which is why **restarting clears it**.
   Proved directly: after an abandoned read, `llookup:publickey@bravo` returned the
   earlier `shared_key` reply (`validation/live_desync_test.py`).
-  Upstream fix offered in
+  Upstream fix **merged** in
   [#545](https://github.com/atsign-foundation/at_python/pull/545): `execute_command`
-  discards a connection whose reply was never read.
+  discards a connection whose reply was never read. Not in a release yet (v0.2.71 predates
+  it), so the local guard below stays for now.
   App side, two layers:
   1. **the guard**: `atsign_io` applies #545's behaviour locally at import — a connection
      whose read fails is discarded, so a queued reply can never be served to a later
@@ -76,7 +84,15 @@ package). Actions taken in this repo:
 
 ---
 
-## When a release > v0.2.69 ships (or you pin trunk) — checklist
+## When a release > v0.2.71 ships (or you pin trunk) — checklist
+
+0. **Remove the abandoned-read guard** in `smart-route-planning-agent/src/atsign/atsign_io.py`
+   (`_discard_connection_on_abandoned_read`) once the release contains #545, and drop
+   `validation/test_abandoned_read_guard.py` with it. It is **harmless to leave** —
+   disconnecting twice is a no-op — so this is cleanup, not urgent. Confirm the release
+   really has it before removing: `git tag --contains dca0b1a`.
+
+### Earlier checklist (v0.2.70 / v0.2.71 — done)
 
 1. **Bump the dependency** to the release that contains the fixes in the docs' install
    lines: `README.md` (§Run it), `GETTING_STARTED_PRODUCTION.md` (§1), and `deploy/` if
@@ -116,6 +132,8 @@ package). Actions taken in this repo:
 | `AtSubscriber` first-contact `_ensure_shared_key` | issue (no PR) | **keep** |
 | `AtPublisher` rebuild + retry | issue (no PR) | **keep** |
 | operator console silence-watchdog | app-level (over SDK monitor) | **keep** |
+| `atsign_io` abandoned-read guard (`_discard_connection_on_abandoned_read`) | #545 (merged, unreleased) | remove once a release > v0.2.71 ships; harmless to keep |
+| `AtPublisher.notify` per-publisher send lock | `AtClient` thread-safety (issue, no PR) | **keep** |
 
 > Track releases at https://github.com/atsign-foundation/at_python/releases. Update this
 > file when a version > v0.2.69 ships.

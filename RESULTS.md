@@ -35,7 +35,7 @@ all in this repo:
 - **Production hardening**: bounded publishes and a monitor liveness watchdog, so a
   network change, NAT timeout or sleeping laptop can no longer wedge a service — the
   failure was reproduced against a frozen atServer and the fix verified the same way.
-- **Seven fixes contributed upstream** to the Python SDK (`atsdk`), merged and released
+- **Eight fixes contributed upstream** to the Python SDK (`atsdk`) — seven merged and released
   in 0.2.70/0.2.71, plus an asyncio RFC — so the platform itself improved.
 
 ## Proof it works (verified live on a local atServer)

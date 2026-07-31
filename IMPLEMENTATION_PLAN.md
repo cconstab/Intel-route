@@ -319,6 +319,7 @@ green while the engine could not start at all.
 
 ### Upstream contributions
 
-Seven fixes merged into `atsign-foundation/at_python` and released in **atsdk 0.2.70 /
-0.2.71**, plus an asyncio RFC (#531) still open. Detail and the keep/remove mapping for
+Eight fixes merged into `atsign-foundation/at_python`: seven released in **atsdk 0.2.70 /
+0.2.71**, and #545 (discard a connection whose reply was never read) merged 2026-07-30 and
+awaiting a release — the local guard stays until then. Plus an asyncio RFC (#531) still open. Detail and the keep/remove mapping for
 our remaining workarounds: [atsdk-upstream-status.md](atsdk-upstream-status.md).
