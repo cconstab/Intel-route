@@ -16,12 +16,14 @@ package). Actions taken in this repo:
   retired subscriber leaves no SDK heartbeat behind. Live-verified on the EE.
 - ✅ **kept** what the SDK still doesn't provide: publisher rebuild-and-retry,
   first-contact pre-warm, operator-console watchdog
-- ✅ **[#545](https://github.com/atsign-foundation/at_python/pull/545) merged
-  (2026-07-30)** — `execute_command` discards a connection whose reply was never read.
-  **Not in a release yet:** the newest tag, v0.2.71, predates it (2026-07-08), so the local
-  equivalent in `atsign_io` stays until a release > v0.2.71 ships. Verify with
-  `git tag --contains dca0b1a` in an `at_python` clone, or check the installed
-  `atconnection.py` for a `disconnect()` in `execute_command`'s read-failure path.
+- ✅ **[#545](https://github.com/atsign-foundation/at_python/pull/545) RELEASED in
+  v0.2.72 (2026-07-31)** — `execute_command` discards a connection whose reply was never
+  read. Verified in the installed package, not just by version number:
+  `"disconnect()" in inspect.getsource(AtConnection.execute_command).split("read_the_response")[-1]`
+  → `True`. Pin bumped to `atsdk>=0.2.72`.
+  **The local guard stays on purpose** — it wraps `AtConnection.read` itself, so it also
+  covers the greeting read inside `connect()`, which 0.2.72 still leaves unguarded (see
+  candidate **B** below). Running both is a no-op: disconnecting twice does nothing.
 - 🔬 **asyncio RFC open:** [#531](https://github.com/atsign-foundation/at_python/pull/531)
   — draft `at_client.aio` PoC (async monitor streams; would obsolete the remaining
   hardening if adopted)
@@ -50,8 +52,8 @@ precedent — opened on a root cause that turned out to be wrong, and closed aga
 
 | | Change | Diff | Notes |
 |---|---|---|---|
-| **A** | `AtClient.__del__` uses `getattr(self, "secondary_connection", None)` | 2 lines | A build that fails before connecting makes the collector raise `AttributeError`, which reads like a crash in the middle of a recoverable retry. No behaviour change for a healthy client. Needs no soak — held only to land with B. |
-| **B** | `connect()` disconnects if the greeting read fails | 5 lines | It sets `_connected = True` *before* reading the greeting, so a failed greeting leaves a dead socket marked live and `find_secondary` (`if not self.is_connected()`) never redials. Same shape as the merged #545, applied to the other read. |
+| **A** | `AtClient.__del__` uses `getattr(self, "secondary_connection", None)` | 2 lines | *(re-confirmed against 0.2.72: still unguarded)* | A build that fails before connecting makes the collector raise `AttributeError`, which reads like a crash in the middle of a recoverable retry. No behaviour change for a healthy client. Needs no soak — held only to land with B. |
+| **B** | `connect()` disconnects if the greeting read fails | 5 lines | *(re-confirmed against 0.2.72: still unguarded)* | It sets `_connected = True` *before* reading the greeting, so a failed greeting leaves a dead socket marked live and `find_secondary` (`if not self.is_connected()`) never redials. Same shape as the merged #545, applied to the other read. |
 | **C** | `AtConnection.__init__` resolves the address once (`getaddrinfo(...)[0][-1]`) and always uses the first entry | 3 lines, but a **design choice** | Options: resolve inside `connect()`; or use `socket.create_connection`, which resolves *and* tries every address but changes timeout semantics (today's explicit `settimeout(None)` is what defeats a bounded connect); or clear the singleton on failure, as we do locally. Maintainers' call — file as an issue with the evidence rather than a drive-by PR. |
 
 **What counts as validated**, so this does not become an indefinite hold:
@@ -133,11 +135,11 @@ fix is theirs to choose.
 
 ## When a release > v0.2.71 ships (or you pin trunk) — checklist
 
-0. **Remove the abandoned-read guard** in `smart-route-planning-agent/src/atsign/atsign_io.py`
-   (`_discard_connection_on_abandoned_read`) once the release contains #545, and drop
-   `validation/test_abandoned_read_guard.py` with it. It is **harmless to leave** —
-   disconnecting twice is a no-op — so this is cleanup, not urgent. Confirm the release
-   really has it before removing: `git tag --contains dca0b1a`.
+0. ~~Remove the abandoned-read guard once #545 ships~~ — **decided against.** #545 is in
+   v0.2.72, but the local guard covers strictly more: it wraps `AtConnection.read`, so it
+   also catches the greeting read inside `connect()`, which still marks the connection
+   `_connected = True` before reading and never disconnects on failure. Removing the guard
+   would reopen that path. Revisit if candidate **B** lands upstream.
 
 ### Earlier checklist (v0.2.70 / v0.2.71 — done)
 

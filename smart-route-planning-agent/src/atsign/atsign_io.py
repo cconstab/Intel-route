@@ -40,9 +40,11 @@ def _discard_connection_on_abandoned_read() -> None:
     is worse than an error: a lookup can return a different record's value and succeed,
     so we could encrypt to the wrong recipient's shared key without anything raising.
 
-    This is at_python PR #545, merged upstream on 2026-07-30 but not in a release yet
-    (v0.2.71 predates it). Applied here until a release > v0.2.71 ships; removing it
-    afterwards is safe either way, because disconnecting twice is a no-op.
+    This is at_python PR #545, released in atsdk 0.2.72 — so the SDK now does it for
+    `execute_command`. Kept anyway, deliberately: patching `read` itself also covers the
+    greeting read inside `connect()`, which still sets `_connected = True` before reading
+    and does not disconnect if that read fails, leaving a dead socket marked live. Running
+    both is a no-op, since disconnecting twice does nothing.
     """
     if getattr(AtConnection, "_discards_on_abandoned_read", False):
         return

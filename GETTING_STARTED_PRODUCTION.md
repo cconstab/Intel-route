@@ -32,7 +32,7 @@ that differ from the EE.
   cd /path/to/Intel-route
   python3 -m venv .venv
   . .venv/bin/activate
-  pip install "atsdk>=0.2.71" pydantic "langgraph==1.0.9" gpxpy "folium==0.14.0" "gradio>=6.7.0"
+  pip install "atsdk>=0.2.72" pydantic "langgraph==1.0.9" gpxpy "folium==0.14.0" "gradio>=6.7.0"
   ```
 - **Dart ≥ 3.5 / Flutter ≥ 3.41** (commuter app, intersection sensor app, policy admin,
   route tooling). The Flutter apps need a **physical device on Android 7.0 / API 24 or
@@ -242,7 +242,7 @@ alert; `--density 0` clears it (auto-clears after ~60s TTL).
 - **Admin authorization:** the engine trusts a record *from* the policy-admin atSign
   (cryptographically sound — only that atSign can send as itself). Add an **allow-list of
   admin atSigns** and use **APKAM enrollment** for the admin's devices.
-- **atsdk:** use **>= 0.2.71** — it carries all the upstreamed fixes (notify
+- **atsdk:** use **>= 0.2.72** — it carries all the upstreamed fixes (notify
   iv_nonce/session_id, shared-key detection, disconnect state, random IVs on put/get,
   seedable monitor resume, stoppable daemon heartbeat). The hardening still kept in this
   repo (rebuild-and-retry publisher, first-contact pre-warm, console watchdog) covers
