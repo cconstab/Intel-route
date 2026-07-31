@@ -259,6 +259,7 @@ loop froze the whole planner.
 | Bounded command-socket reads | `atsign_io._bound_socket_reads` |
 | Monitor **liveness watchdog** — heartbeat acks count as liveness, so a quiet namespace is not mistaken for a dead one; true silence force-closes the socket so the reconnect can run | `AtSubscriber` (all subscribers: planner, policy engine, console) |
 | Operator console self-heals a wedged subscriber | `operator_console` watchdog |
+| **One publisher, one send at a time** — a shared publisher used from two threads interleaved writes on its single TLS socket and wedged | `AtPublisher.notify` per-publisher lock |
 
 Reproduced *and* verified against a frozen atServer (`docker pause` — no FIN/RST, like a
 real network change): `validation/live_outage_test.py`, plus

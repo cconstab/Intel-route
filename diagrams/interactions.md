@@ -11,12 +11,16 @@ sequenceDiagram
     participant Cam as Roadside cameras<br/>(or a phone running intersection_app)
     participant I as Intersection agents<br/>@intxn_*
     participant F as Data feeds<br/>@weather/@traffic/@events
+    participant ADM as Policy Admin<br/>@route_policy_admin (web)
     participant POL as Policy engine<br/>@route_policy
     participant P as Smart Route Planner<br/>@smartroute_planner (LangGraph)
     participant C as Commuter app<br/>@commuter01 (Flutter)
     participant O as Operator console<br/>@route_operator (Gradio)
 
-    POL-->>P: policy grant set (identity + role, default-deny)
+    ADM->>POL: admin {grants, version} — operator authorizes/revokes a publisher
+    Note over POL: rules kept as encrypted records in the engine's OWN atSign,<br/>so a revocation survives a restart of anything
+    POL-->>ADM: policy (mirror) — the page shows what is enforced, not what it asked for
+    POL-->>P: policy grant set (identity + role, default-deny)<br/>republished every 30s
     Cam->>I: local inference (on-device: ML Kit / Scene Intelligence)<br/>video never leaves the site
     I-)P: live_traffic (encrypted notify)
     F-)P: weather / traffic_trends / planned_events (encrypted notify)
@@ -43,7 +47,8 @@ flowchart LR
     E -- "notify: planned_events" --> P
 
     POL[Policy engine<br/>@route_policy<br/>rules as atKeys, default-deny] -. "authorize publishers/clients (RPC)" .-> P
-    ADM[Policy Admin<br/>@route_policy_admin] -- "defines rules" --> POL
+    ADM[Policy Admin<br/>@route_policy_admin] -- "requests rule changes" --> POL
+    POL -. "mirrors the enforced rule set" .-> ADM
 
     P[Smart Route Planner<br/>@smartroute_planner<br/>LangGraph · headless]
     GPX[(GPX routes<br/>+ cache)] --- P

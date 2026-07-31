@@ -34,6 +34,15 @@ package). Actions taken in this repo:
 
 ## Issue write-ups filed (no PR yet — need maintainer/design input)
 
+- **`AtClient` is not thread-safe, and does not say so** — one client owns one TLS socket
+  carrying one command stream, so two threads sending concurrently interleave their writes
+  and each reads the other's reply. It surfaces as
+  `[SSL: WRONG_VERSION_NUMBER] wrong version number` or
+  `Read on closed or unwrapped SSL socket`, after which the client stays wedged. This is
+  easy to hit without realising: our policy engine publishes from its heartbeat loop and
+  from its notification callback, which are different threads by construction. Worth either
+  documenting the constraint or serialising inside the client. Our side serialises per
+  publisher (`AtPublisher.notify`, `validation/test_publisher_serialisation.py`).
 - **first-contact decrypt drop** — new sender's first notification dropped
 - **monitor resume on reconnect** — `last_received_time` can't be seeded after client recreate
 - **"Failed to decrypt shared_key… Ciphertext length must be equal to key size"** —

@@ -1,6 +1,13 @@
 // Policy Admin — pure Dart, runs as the Policy Admin atSign (@route_policy_admin / @kilo)
-// and exposes the access policy as a small web page. Toggling a publisher pushes the new
-// grant set to the policy engine (@route_policy / @juliet), which persists + republishes it.
+// and exposes the access policy as a small web page.
+//
+// The engine owns the rule set; this page reflects it. It holds no opinion of its own: the
+// engine mirrors its rules here and the page renders (and polls) that, so a change made
+// elsewhere shows up without a reload. A toggle is a REQUEST — it is pushed to the engine,
+// re-pushed if the engine has not mirrored it back (a notification can be lost), and then
+// reported as not applied rather than silently springing the switch back. Nothing is pushed
+// at startup: doing so would overwrite the operator's revocations every time this process
+// restarted.
 //
 // Segregation of duties: the admin (@kilo) governs access from a different identity than the
 // policy engine (@juliet) and the planner (@alpha).

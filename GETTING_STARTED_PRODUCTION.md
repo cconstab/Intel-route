@@ -163,6 +163,11 @@ worth knowing:
   engine mirrors its rules to the atSign configured as `policy_admin`, so the admin must
   run **as that atSign** or no rule set will ever reach it. If nothing arrives, check
   `policy_engine.log` — it ends with a `FATAL` line if the engine refused to start.
+- If the **planner** denies a publisher the page shows as authorized, the denial itself
+  says how old its rule set is (`policy is 12s old, 7 publisher(s) granted`, or `STALE`
+  past 90s when the engine publishes every 30s). A `STALE` denial means the planner is not
+  hearing the engine, not that the publisher is unauthorized — check
+  `/tmp/stack/policy_engine.log` for failing sends to the planner.
 - A toggle is a **request**, not a fact. The page shows "Applying…" until the engine
   mirrors the change back, re-pushes it up to 3 times in case the notification was lost,
   and then states plainly that it was not applied — including the atServer's verdict on

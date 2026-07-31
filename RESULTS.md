@@ -50,6 +50,7 @@ Every claim below was run end-to-end, not asserted:
 | **A genuine live reroute from an encrypted push** | Density-30 pushed at a real GPX trackpoint → unmodified LangGraph rerouted `berkeley-oakland-i880 → berkeley-sanbruno` |
 | **Default-deny policy is enforced** | An un-granted intersection (`@delta` / `@lima`) was dropped until the Policy Admin authorized it |
 | **A new node joins the live network** | `intxn_downtown` powered on → DENIED → authorized → CACHED, **no restart, no config edit** |
+| **Governance survives a restart** | A revocation is held in the engine's own encrypted records, so restarting the engine — or the whole stack — no longer re-authorises a publisher the operator revoked; the admin page renders what the engine actually enforces rather than its own assumption |
 | Reroute reaches the people | Commuter got a 🚨 REROUTE ALERT; operator console drew the new route on a live map |
 | **A phone camera drives the city** | `intersection_app` detected model cars on-device, published density, and the planner rerouted — the sensing end is real, not simulated |
 | **A network outage no longer wedges it** | With a *frozen* atServer (`docker pause`, so no FIN/RST — a real network change): publishing stayed bounded, the planner loop kept iterating, and both directions healed on their own once the peer returned |

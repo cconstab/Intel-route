@@ -3,18 +3,28 @@
 """
 Policy engine (runs as the policy atSign, e.g. @route_policy / EE @juliet).
 
-The zero-trust trust plane. Rules are stored as encrypted records (atKeys) in the
-engine's OWN atSign store (the `PolicyStore`), then the engine publishes the
-resulting authorization set to the planner. Default-deny: a publisher the engine
-has not granted is dropped by the planner.
+The zero-trust trust plane, and the only owner of the rule set. Rules are stored as
+encrypted records (atKeys) in the engine's OWN atSign store (the `PolicyStore`), and the
+engine publishes the resulting authorization set to the planner, which enforces it —
+default-deny: a publisher the engine has not granted is dropped. It also mirrors the set
+to the Policy Admin, so that page can show what is actually enforced rather than what it
+asked for. Both go out on every change and on a heartbeat (`--interval`).
+
+Because the store is the source of truth, a grant or revocation survives a restart. A
+marker record distinguishes "no rules have ever been written" from "every publisher is
+revoked", which is a real state and must not be re-seeded. If the rules cannot be read the
+engine refuses to start rather than fall back to `--grant`, which would silently
+re-authorise a publisher the operator revoked.
 
 `PolicyStore` is an interface; `AtKeyPolicyStore` (default) keeps rules as self
 atKeys. A database-backed store can be dropped in later (NoPorts-style) with no
 change to callers.
 
 Run (as the policy atSign):
-    python -m atsign.policy_engine --grant intxn_market_st,intxn_5th_ave,weather_feed,traffic_trends_feed,events_feed
-    # (omit a role to demonstrate default-deny — e.g. leave out intxn_broadway)
+    python -m atsign.policy_engine
+    # --grant seeds ONLY an atSign that has never held rules; after that the store wins
+    # and changes come from the Policy Admin. To demonstrate default-deny on an engine
+    # that already has rules, revoke the role in the Policy Admin instead.
 """
 import argparse
 import json
@@ -125,7 +135,9 @@ def initial_grants(store, seed, known):
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--grant", default=",".join(PUBLISHER_ROLES),
-                    help="comma-separated roles to authorize initially (default: all publishers)")
+                    help="roles to authorize on an atSign that has never held rules "
+                         "(default: all publishers). Ignored once rules exist — the "
+                         "engine's own records are the source of truth.")
     ap.add_argument("--interval", type=float, default=30.0, help="policy re-publish heartbeat (s)")
     ap.add_argument("--repeat", type=int, default=0, help="(accepted for compatibility; ignored — runs as a service)")
     ap.add_argument("--verbose", action="store_true")

@@ -24,6 +24,31 @@ Dart code in [`../dart_client/`](../dart_client/).
 
 ---
 
+## Offline regression tests
+
+Network-free, so they run anywhere and gate a change without an atServer. Each one pins a
+failure that actually happened:
+
+| Test | What it pins |
+|------|--------------|
+| `test_publisher_serialisation.py` | One publisher never runs two sends at once. A shared publisher used from two threads interleaved writes on its single TLS socket (`[SSL: WRONG_VERSION_NUMBER]`, `Read on closed or unwrapped SSL socket`) and wedged, silently stranding the planner on an old rule set. Removing the lock makes this test report overlapping sends. |
+| `test_policy_persistence.py` | A revocation survives a restart: the engine reads back its own rule records, `--grant` seeds only a store that has never been written, an empty set means "everything revoked", an unreadable store raises rather than re-authorising everyone, and a rule another atSign *shares* with the engine is never read back as a grant. Its fake secondary validates the scan command against the SDK's own `ScanVerbBuilder` — an earlier version accepted a hand-built `scan:rule.`, which a real server rejects with `AT0003`, so the suite passed green while the engine could not start. |
+| `test_abandoned_read_guard.py` | A connection whose reply was never read is discarded, so a queued reply can never be served to a later command (upstream [#545](https://github.com/atsign-foundation/at_python/pull/545)). |
+| `test_subscriber_liveness.py` | Heartbeat acks count as liveness; true silence forces a reconnect. |
+| `test_monitor_resume.py` | A reconnect resumes from the newest epoch processed — no gap, no replay. |
+| `test_first_contact_retry.py` | A new sender's first record is not dropped while its shared key propagates. |
+| `test_policy_revoke_purge.py` | A revocation purges the publisher's cached data immediately, so no reroute lingers. |
+| `test_operator_watchdog.py` | The console self-heals a wedged subscriber. |
+
+Run them all:
+
+```bash
+PYTHONPATH=smart-route-planning-agent/src python validation/test_<name>.py
+```
+
+The `live_*.py` scripts need a running atServer and are the paired live proofs (frozen-peer
+outage, desynchronisation, and recovery).
+
 ## Files
 
 | File | What it is |

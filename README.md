@@ -59,6 +59,11 @@ Switch profiles with `ATSIGN_PROFILE=ee` (default) or `ATSIGN_PROFILE=vanity`.
 | `planned_events` | events feed → planner | `PlannedEventsData` |
 | `policy` | policy engine → planner **and policy admin** | `{grants: [atSign], issued_by}` |
 | `admin` | policy admin → policy engine | `{grants: [atSign], version}` |
+
+The **policy engine owns the rule set**, stored as encrypted records in its own atSign, so a
+grant or revocation survives a restart of anything. The admin page states what the engine
+mirrors back to it, never its own assumption, and the planner enforces the last set it was
+given (default-deny until it has one).
 | `route` | planner → commuter | `RoutePush` (route, distance, reason, rerouted, points) |
 | `status` | planner → operator | `StatusPush` (+ route geometry) |
 | `request` | commuter → planner | `{source, destination}` |
