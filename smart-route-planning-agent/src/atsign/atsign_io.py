@@ -25,6 +25,7 @@ from at_client.common import AtSign
 from at_client.common.keys import SharedKey
 from at_client.connections import Address
 from at_client.connections.atconnection import AtConnection
+from at_client.connections.atrootconnection import AtRootConnection
 from at_client.connections.notification.atevents import AtEventType
 
 from atsign import roles
@@ -63,6 +64,40 @@ def _discard_connection_on_abandoned_read() -> None:
 
 _discard_connection_on_abandoned_read()
 
+
+def _quiet_del_after_failed_construction() -> None:
+    """Stop a failed client build from printing a traceback that looks like a crash.
+
+    `AtClient.__init__` does the root lookup, connect and auth, so when it fails the
+    object never gets a `secondary_connection`. The SDK's `__del__` reads that attribute
+    unguarded, so the collector prints
+
+        Exception ignored in: <function AtClient.__del__>
+        AttributeError: 'AtClient' object has no attribute 'secondary_connection'
+
+    for every failed build. It is noise — the real error is already raised and logged by
+    whoever asked for the client, and there is no connection left to close — but it reads
+    like a fatal error at exactly the moment someone is reading the log to work out
+    whether a retry recovered.
+    """
+    if getattr(AtClient, "_del_survives_failed_init", False):
+        return
+    original_del = AtClient.__del__
+
+    def safe_del(self):
+        if getattr(self, "secondary_connection", None) is None:
+            return  # __init__ raised before connecting; nothing to close
+        try:
+            original_del(self)
+        except Exception:
+            pass  # a collector has nowhere useful to report this
+
+    AtClient.__del__ = safe_del
+    AtClient._del_survives_failed_init = True
+
+
+_quiet_del_after_failed_construction()
+
 # Command/response round trips are fast; well past this the socket is not coming back.
 COMMAND_READ_TIMEOUT_S = 15.0
 # Creating a client does a root lookup, a TLS connect and PKAM auth. Against an
@@ -93,6 +128,34 @@ def _bound_socket_reads(client: AtClient, seconds: float) -> None:
         pass
 
 
+# Serialises dropping and redialling the shared root connection. Two threads racing to
+# replace it would both call get_instance() with the singleton empty, and the loser's
+# AtRootConnection.__init__ raises "Singleton class". Publishers and subscribers do build
+# clients from different threads, so this is reachable.
+_root_lock = threading.Lock()
+
+
+def _reset_root_connection() -> None:
+    """Drop the process-wide root connection so the next client builds a fresh one.
+
+    `AtRootConnection` is a singleton, and `AtConnection.__init__` resolves the address
+    once and keeps it in `_addr_info` for the life of the process. So if the root server
+    a process happens to be pinned to stops answering, every later client build fails in
+    `find_secondary` — before `AtClient` even assigns `secondary_connection`, which is why
+    the failure shows up as an AttributeError from `__del__`. Rebuilding the client does
+    not help, because the broken root connection is shared: the wedge lasts until the
+    process restarts. Clearing the singleton lets the next attempt re-resolve and redial.
+    """
+    instance = getattr(AtRootConnection, "_AtRootConnection__instance", None)
+    if instance is None:
+        return
+    try:
+        instance.disconnect()
+    except Exception:
+        pass
+    AtRootConnection._AtRootConnection__instance = None
+
+
 def _new_bounded_client(atsign: AtSign, root: str, queue: Queue | None = None,
                         verbose: bool = False) -> AtClient:
     """Create an AtClient whose setup and command socket cannot block forever.
@@ -108,8 +171,21 @@ def _new_bounded_client(atsign: AtSign, root: str, queue: Queue | None = None,
     previous = socket.getdefaulttimeout()
     socket.setdefaulttimeout(CONNECT_TIMEOUT_S)
     try:
-        client = AtClient(atsign, root_address=Address.from_string(root),
-                          queue=queue, verbose=verbose)
+        try:
+            client = AtClient(atsign, root_address=Address.from_string(root),
+                              queue=queue, verbose=verbose)
+        except Exception as first:
+            # A shared root connection that has gone bad fails every build identically,
+            # so retrying as-is would repeat forever. Drop it and redial once.
+            blamed = getattr(AtRootConnection, "_AtRootConnection__instance", None)
+            with _root_lock:
+                if getattr(AtRootConnection, "_AtRootConnection__instance", None) is blamed:
+                    print(f"[client {atsign}] build failed ({first}); "
+                          "dropping the shared root connection and redialling", flush=True)
+                    _reset_root_connection()
+                client = AtClient(atsign, root_address=Address.from_string(root),
+                                  queue=queue, verbose=verbose)
+            print(f"[client {atsign}] rebuilt after redialling root", flush=True)
     finally:
         socket.setdefaulttimeout(previous)
     _bound_socket_reads(client, COMMAND_READ_TIMEOUT_S)
@@ -129,6 +205,7 @@ class AtPublisher:
         self._root = root or roles.root()
         self._verbose = verbose
         self._stale = False  # set when a send was abandoned; forces a fresh client
+        self._failures = 0  # consecutive failed sends, so recovery shows up in the log
         # One publisher owns one TLS socket carrying one command stream, so two threads
         # sending at once interleave writes and read each other's replies. That surfaces
         # as [SSL: WRONG_VERSION_NUMBER] or "Read on closed or unwrapped SSL socket" and
@@ -161,7 +238,16 @@ class AtPublisher:
                 f"notify to {to} waited {deadline_s:.0f}s for another send on this "
                 "publisher; abandoned")
         try:
-            return self._notify_bounded(to, key_name, value, namespace, ttl_ms, deadline_s)
+            result = self._notify_bounded(to, key_name, value, namespace, ttl_ms, deadline_s)
+        except Exception:
+            self._failures += 1
+            raise
+        else:
+            if self._failures:
+                print(f"[publisher {self.atsign}] publishing recovered after "
+                      f"{self._failures} failure(s)", flush=True)
+                self._failures = 0
+            return result
         finally:
             self._send_lock.release()
 

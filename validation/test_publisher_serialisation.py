@@ -24,12 +24,17 @@ from atsign.atsign_io import AtPublisher  # noqa: E402
 
 
 def publisher_with(fake_send):
-    """An AtPublisher with no network: __init__ would connect, so build it directly."""
+    """An AtPublisher with no network: __init__ would connect, so build it directly.
+
+    This mirrors every field __init__ sets apart from the client itself; if a new one is
+    added there, add it here too.
+    """
     pub = AtPublisher.__new__(AtPublisher)
     pub.atsign = AtSign("@alpha")
     pub._root = "unused"
     pub._verbose = False
     pub._stale = False
+    pub._failures = 0
     pub._send_lock = threading.Lock()
     pub.client = None
     pub._notify_once = fake_send

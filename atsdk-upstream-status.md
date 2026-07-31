@@ -50,6 +50,16 @@ package). Actions taken in this repo:
   from its notification callback, which are different threads by construction. Worth either
   documenting the constraint or serialising inside the client. Our side serialises per
   publisher (`AtPublisher.notify`, `validation/test_publisher_serialisation.py`).
+- **a dead root server wedges a process permanently** — `AtRootConnection` is a
+  process-wide singleton and `AtConnection.__init__` resolves the address once into
+  `_addr_info`, so if the root server a process is pinned to stops answering, every later
+  `AtClient(...)` fails in `find_secondary` and no amount of client rebuilding recovers;
+  only a restart does. Two small fixes would close it upstream: re-resolve (or drop the
+  singleton) when a root connection fails, and guard `AtClient.__del__`, which currently
+  raises `AttributeError: 'AtClient' object has no attribute 'secondary_connection'` for
+  every failed build because `__init__` never got that far — noise that reads like a crash
+  in the middle of a recoverable retry. Our side: `atsign_io._reset_root_connection` and a
+  guarded `__del__` (`validation/test_root_connection_recovery.py`).
 - **first-contact decrypt drop** — new sender's first notification dropped
 - **monitor resume on reconnect** — `last_received_time` can't be seeded after client recreate
 - **"Failed to decrypt shared_key… Ciphertext length must be equal to key size"** —

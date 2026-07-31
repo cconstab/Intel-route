@@ -260,6 +260,7 @@ loop froze the whole planner.
 | Monitor **liveness watchdog** — heartbeat acks count as liveness, so a quiet namespace is not mistaken for a dead one; true silence force-closes the socket so the reconnect can run | `AtSubscriber` (all subscribers: planner, policy engine, console) |
 | Operator console self-heals a wedged subscriber | `operator_console` watchdog |
 | **One publisher, one send at a time** — a shared publisher used from two threads interleaved writes on its single TLS socket and wedged | `AtPublisher.notify` per-publisher lock |
+| **A bad shared root connection is dropped, not inherited** — the SDK's root connection is a process-wide singleton that resolves its address once, so a dead root wedged every later client build until restart | `atsign_io._reset_root_connection`, retried inside `_new_bounded_client` |
 
 Reproduced *and* verified against a frozen atServer (`docker pause` — no FIN/RST, like a
 real network change): `validation/live_outage_test.py`, plus
@@ -280,6 +281,29 @@ operator had just re-authorised — because the policy record to the planner was
 kept failing. `AtPublisher.notify()` now serialises sends per publisher, so no caller has to
 remember. Test: `validation/test_publisher_serialisation.py` (verified to detect 3 overlaps
 with the lock removed).
+
+### Recovering from a dead root server
+
+`AtRootConnection` is a singleton and `AtConnection.__init__` resolves its address once,
+keeping it for the life of the process. When the root server a process was pinned to
+stopped answering, **every** later client build failed in `find_secondary` — before
+`AtClient` assigns `secondary_connection`, which is why it surfaced as
+`AttributeError: 'AtClient' object has no attribute 'secondary_connection'` from `__del__`.
+Rebuilding the client could not help, because the broken root connection was shared:
+
+```
+notify to @intc_commuter01 failed (EOF occurred in violation of protocol)
+reconnect failed: EOF occurred in violation of protocol
+[planner-service] loop error: EOF occurred in violation of protocol
+```
+
+repeating with no recovery until a restart. A failed build now drops the shared root
+connection and redials once, under a lock so two threads cannot race to replace the
+singleton (the loser's `AtRootConnection.__init__` raises "Singleton class"). The
+collector's misleading `AttributeError` is silenced, and a publisher that comes back
+says so, so a log full of failures is no longer the whole story.
+
+Test: `validation/test_root_connection_recovery.py`.
 
 ### Policy applied consistently
 
