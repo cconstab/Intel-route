@@ -33,6 +33,19 @@ def atsign_for(role: str) -> str:
     return _load()["roles"][role][_profile()]
 
 
+def publisher_roles() -> list:
+    """Roles that publish into the planner: intersections and data feeds.
+
+    Read from the config, because the policy engine and the Dart policy admin must agree
+    on which publishers exist. The admin offers a switch for every `intxn_*` / `*_feed`
+    role it finds here, and the engine authorizes only publishers it knows — so a list
+    hardcoded in the engine means a publisher added to the config gets a switch that is
+    silently dropped on every grant (and, confusingly, works fine on revoke).
+    """
+    return sorted(r for r in _load()["roles"]
+                  if r.startswith("intxn_") or r.endswith("_feed"))
+
+
 def role_for_atsign(atsign: str) -> str:
     prof = _profile()
     for role, m in _load()["roles"].items():

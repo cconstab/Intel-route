@@ -168,6 +168,12 @@ worth knowing:
   past 90s when the engine publishes every 30s). A `STALE` denial means the planner is not
   hearing the engine, not that the publisher is unauthorized — check
   `/tmp/stack/policy_engine.log` for failing sends to the planner.
+- If **authorizing** a publisher fails three times while **revoking** works, the engine
+  does not recognise that atSign. It authorizes only publishers named in the config
+  (`intxn_*` / `*_feed`), and it logs both the list at startup and any atSign it was asked
+  to grant but does not know:
+  `admin named publisher(s) this engine does not know`. The asymmetry is the giveaway —
+  a revoke of an unknown atSign is indistinguishable from success, so only grants fail.
 - A toggle is a **request**, not a fact. The page shows "Applying…" until the engine
   mirrors the change back, re-pushes it up to 3 times in case the notification was lost,
   and then states plainly that it was not applied — including the atServer's verdict on

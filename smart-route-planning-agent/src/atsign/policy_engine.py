@@ -42,12 +42,6 @@ from at_client.util.verbbuilder import ScanVerbBuilder
 from atsign import roles, wire
 from atsign.atsign_io import AtPublisher, AtSubscriber
 
-PUBLISHER_ROLES = [
-    "intxn_market_st", "intxn_5th_ave", "intxn_broadway", "intxn_downtown",
-    "weather_feed", "traffic_trends_feed", "events_feed",
-]
-
-
 class AtKeyPolicyStore:
     """PolicyStore backed by the engine's own atSign store (rules = self atKeys)."""
 
@@ -134,7 +128,8 @@ def initial_grants(store, seed, known):
 
 def main(argv):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grant", default=",".join(PUBLISHER_ROLES),
+    publisher_roles = roles.publisher_roles()
+    ap.add_argument("--grant", default=",".join(publisher_roles),
                     help="roles to authorize on an atSign that has never held rules "
                          "(default: all publishers). Ignored once rules exist — the "
                          "engine's own records are the source of truth.")
@@ -147,7 +142,7 @@ def main(argv):
     me = AtSign(me_str)
     planner = roles.atsign_for("planner")
     admin_atsign = roles.atsign_for("policy_admin")
-    all_publishers = {roles.atsign_for(r) for r in PUBLISHER_ROLES}
+    all_publishers = {roles.atsign_for(r) for r in publisher_roles}
     granted = {roles.atsign_for(r) for r in args.grant.split(",") if r.strip()}
 
     engine = AtClient(me, root_address=Address.from_string(roles.root()), verbose=args.verbose)
@@ -242,6 +237,8 @@ def main(argv):
         publish()
         print(f"[policy] admin {frm} updated grants -> {sorted(granted)}")
 
+    print(f"[policy] engine {me_str}; publishers it can authorize (from config): "
+          f"{publisher_roles}")
     print(f"[policy] engine {me_str}; initial grants {sorted(granted)}")
     persist()
     try:

@@ -169,6 +169,36 @@ def main():
         pass
     print("scan command       -> built by the SDK; a hand-built one is rejected")
 
+    # 10. The engine must authorize whatever the config calls a publisher. The admin
+    #     offers a switch for every intxn_* / *_feed role it finds there, and the engine
+    #     drops anything it does not know — silently, and only on grant, because a revoke
+    #     of an unknown atSign looks identical to success. A hardcoded list in the engine
+    #     therefore produces a switch that can never be turned on.
+    import json
+    import tempfile
+
+    original_cfg = roles._CFG
+    original_path = os.environ.get("ATSIGN_CONFIG")
+    try:
+        config = json.loads(json.dumps(roles._load()))  # deep copy
+        config["roles"]["intxn_phone"] = {"ee": "@phone_ee", "vanity": "@phone_vanity"}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(config, f)
+            temp_path = f.name
+        os.environ["ATSIGN_CONFIG"] = temp_path
+        roles._CFG = None
+        assert "intxn_phone" in roles.publisher_roles(), (
+            "a publisher added to the config is not authorizable — the engine is not "
+            "reading the config")
+    finally:
+        roles._CFG = original_cfg
+        if original_path is None:
+            os.environ.pop("ATSIGN_CONFIG", None)
+        else:
+            os.environ["ATSIGN_CONFIG"] = original_path
+        os.unlink(temp_path)
+    print("new publisher      -> authorizable without editing the engine")
+
     print("\nPASS: rules are read back from the store, so revocations survive a restart.")
 
 
