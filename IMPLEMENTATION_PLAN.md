@@ -260,6 +260,7 @@ loop froze the whole planner.
 | Monitor **liveness watchdog** — heartbeat acks count as liveness, so a quiet namespace is not mistaken for a dead one; true silence force-closes the socket so the reconnect can run | `AtSubscriber` (all subscribers: planner, policy engine, console) |
 | Operator console self-heals a wedged subscriber | `operator_console` watchdog |
 | **One publisher, one send at a time** — a shared publisher used from two threads interleaved writes on its single TLS socket and wedged | `AtPublisher.notify` per-publisher lock |
+| **A cold start streams only new notifications** — `monitor:0` asks the server to replay everything it retains, so a restart re-applied every historical rule change and re-ingested old live records | `AtSubscriber` seeds `_last_epoch` to now (`replay_backlog=True` to opt out) |
 | **A bad shared root connection is dropped, not inherited** — the SDK's root connection is a process-wide singleton that resolves its address once, so a dead root wedged every later client build until restart | `atsign_io._reset_root_connection`, retried inside `_new_bounded_client` |
 
 Reproduced *and* verified against a frozen atServer (`docker pause` — no FIN/RST, like a

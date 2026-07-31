@@ -89,6 +89,15 @@ fix is theirs to choose.
   every failed build because `__init__` never got that far — noise that reads like a crash
   in the middle of a recoverable retry. Our side: `atsign_io._reset_root_connection` and a
   guarded `__del__` (`validation/test_root_connection_recovery.py`).
+- **`start_monitor()` defaults to replaying the entire retained backlog** —
+  `last_received_time=0` is rendered literally as `monitor:0 <regex>`, so a client that
+  just wants to watch for new notifications re-receives everything the server still holds.
+  The Dart client streams only new ones. This is a sharp edge rather than a bug, but the
+  default is the surprising direction: our policy engine re-applied every historical rule
+  change on startup, republishing each to the planner, and the planner re-ingested expired
+  live records. A `since_now` default (or at least a documented warning) would help. Our
+  side seeds the epoch to "now" minus a small grace (`AtSubscriber`, `replay_backlog=True`
+  to opt out).
 - **first-contact decrypt drop** — new sender's first notification dropped
 - **monitor resume on reconnect** — `last_received_time` can't be seeded after client recreate
 - **"Failed to decrypt shared_key… Ciphertext length must be equal to key size"** —

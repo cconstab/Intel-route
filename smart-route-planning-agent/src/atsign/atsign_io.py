@@ -111,6 +111,9 @@ PUBLISH_DEADLINE_S = 25.0
 # The SDK heartbeats the monitor every ~30s and its acks arrive as queue events, so
 # silence across several heartbeats means the connection is dead even if the socket
 # never said so.
+# Small window of history accepted on a fresh start, so a notification sent moments before
+# we finished connecting is not lost to clock skew between us and the atServer.
+MONITOR_STARTUP_GRACE_MS = 10_000
 MONITOR_SILENCE_TIMEOUT_S = 90.0
 WATCHDOG_INTERVAL_S = 15.0
 
@@ -329,7 +332,8 @@ class AtSubscriber:
     def __init__(self, atsign: str, regex: str,
                  on_record: Callable[[str, str, str, dict], None],
                  root: str | None = None, verbose: bool = False,
-                 silence_timeout_s: float = MONITOR_SILENCE_TIMEOUT_S):
+                 silence_timeout_s: float = MONITOR_SILENCE_TIMEOUT_S,
+                 replay_backlog: bool = False):
         self.q: Queue = Queue()
         self.atsign_str = atsign
         self.regex = regex
@@ -343,11 +347,21 @@ class AtSubscriber:
         self.silence_timeout_s = silence_timeout_s
         self._last_event_at = time.monotonic()
         self._watchdog_started = False
-        # Highest notification epoch (ms) we've processed. On reconnect we resume the
-        # monitor from here (monitor:<epoch> <regex>) instead of the SDK default of 0 —
-        # so a notification that arrived during the disconnect window is replayed exactly
-        # once, and we don't re-stream the entire retained backlog (which caused flapping).
-        self._last_epoch = 0
+        # Highest notification epoch (ms) we've processed. The monitor resumes from here
+        # (monitor:<epoch> <regex>) so a notification that arrived during a disconnect is
+        # delivered exactly once.
+        #
+        # It starts at "now", not 0, because the SDK builds "monitor:0 <regex>" verbatim
+        # and the server answers that by REPLAYING everything it still retains. On a fresh
+        # start that made the policy engine re-apply every historical rule change in order
+        # — persisting and republishing each one, so the planner walked through a series of
+        # stale rule sets while the engine booted — and made the planner re-ingest old
+        # live_traffic. The Dart client streams only new notifications; this matches it.
+        # Anything sent while we were down is genuinely missed, which is the right trade:
+        # our services hold their own state (the engine's rules are persisted) and live
+        # records carry a TTL measured in seconds.
+        self._last_epoch = 0 if replay_backlog else (
+            int(time.time() * 1000) - MONITOR_STARTUP_GRACE_MS)
         # First notification from a never-seen sender can arrive before that sender's
         # shared key has propagated to us; the SDK then fails to decrypt (NoneType) and
         # silently drops it. We pre-resolve the shared key with a short retry so the
@@ -423,7 +437,7 @@ class AtSubscriber:
                 # and is policed by the watchdog instead.
                 self.client = _new_bounded_client(
                     AtSign(self.atsign_str), self.root, queue=self.q, verbose=self.verbose)
-                resume = f" (resuming from epoch {self._last_epoch})" if self._last_epoch else ""
+                resume = f" from epoch {self._last_epoch}" if self._last_epoch else " (full backlog)"
                 print(f"[subscriber {self.atsign_str}] monitor starting{resume}", flush=True)
                 # blocks until the monitor dies
                 self.client.start_monitor(self.regex, last_received_time=self._last_epoch)

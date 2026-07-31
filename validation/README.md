@@ -36,7 +36,7 @@ failure that actually happened:
 | `test_root_connection_recovery.py` | A dead root server cannot wedge the process. The SDK's root connection is a singleton that resolves its address once, so every client build kept failing in `find_secondary` (seen as `EOF occurred in violation of protocol` plus an `AttributeError` from `__del__`) with no recovery until restart. A failed build now drops it and redials, under a lock so two threads cannot race the singleton. |
 | `test_abandoned_read_guard.py` | A connection whose reply was never read is discarded, so a queued reply can never be served to a later command (upstream [#545](https://github.com/atsign-foundation/at_python/pull/545)). |
 | `test_subscriber_liveness.py` | Heartbeat acks count as liveness; true silence forces a reconnect. |
-| `test_monitor_resume.py` | A reconnect resumes from the newest epoch processed — no gap, no replay. |
+| `test_monitor_resume.py` | A cold start streams only new notifications (the SDK sends `monitor:0` verbatim, which replays the whole retained backlog), and a reconnect resumes from the newest epoch processed — no gap, no replay. |
 | `test_first_contact_retry.py` | A new sender's first record is not dropped while its shared key propagates. |
 | `test_policy_revoke_purge.py` | A revocation purges the publisher's cached data immediately, so no reroute lingers. |
 | `test_operator_watchdog.py` | The console self-heals a wedged subscriber. |
