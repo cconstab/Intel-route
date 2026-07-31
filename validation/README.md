@@ -48,7 +48,9 @@ PYTHONPATH=smart-route-planning-agent/src python validation/test_<name>.py
 ```
 
 The `live_*.py` scripts need a running atServer and are the paired live proofs (frozen-peer
-outage, desynchronisation, and recovery).
+outage, desynchronisation, and recovery). `live_root_recovery_test.py` is the one to reach
+for deliberately: it poisons the process-wide root connection so the recovery path can be
+proved on demand instead of waiting for a real root-server outage.
 
 ## Files
 

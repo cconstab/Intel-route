@@ -39,6 +39,33 @@ package). Actions taken in this repo:
 | [#545](https://github.com/atsign-foundation/at_python/pull/545) | `fix/discard-connection-on-abandoned-read` | a connection whose reply was never read is discarded, so a queued reply can never be served to a later command (**merged 2026-07-30 — awaiting a release > v0.2.71**) |
 | [#526](https://github.com/atsign-foundation/at_python/pull/526) | `fix/put-get-random-iv` | random IV for stored keys (put/get), Dart-matched; self+shared; iv_nonce via `UpdateVerbBuilder`; cross-SDK interop test + opt-in CI workflow |
 
+## Candidate PRs from the July 2026 wedge — HELD until validated in production
+
+Found while diagnosing a planner that stopped publishing and never recovered. All three are
+implemented locally in `smart-route-planning-agent/src/atsign/atsign_io.py` and covered by
+`validation/test_root_connection_recovery.py`. **Deliberately not opened yet:** they fix a
+failure we have reasoned about and reproduced synthetically, but have not yet watched
+recover in the field. [#544](https://github.com/atsign-foundation/at_python/pull/544) is the
+precedent — opened on a root cause that turned out to be wrong, and closed again.
+
+| | Change | Diff | Notes |
+|---|---|---|---|
+| **A** | `AtClient.__del__` uses `getattr(self, "secondary_connection", None)` | 2 lines | A build that fails before connecting makes the collector raise `AttributeError`, which reads like a crash in the middle of a recoverable retry. No behaviour change for a healthy client. Needs no soak — held only to land with B. |
+| **B** | `connect()` disconnects if the greeting read fails | 5 lines | It sets `_connected = True` *before* reading the greeting, so a failed greeting leaves a dead socket marked live and `find_secondary` (`if not self.is_connected()`) never redials. Same shape as the merged #545, applied to the other read. |
+| **C** | `AtConnection.__init__` resolves the address once (`getaddrinfo(...)[0][-1]`) and always uses the first entry | 3 lines, but a **design choice** | Options: resolve inside `connect()`; or use `socket.create_connection`, which resolves *and* tries every address but changes timeout semantics (today's explicit `settimeout(None)` is what defeats a bounded connect); or clear the singleton on failure, as we do locally. Maintainers' call — file as an issue with the evidence rather than a drive-by PR. |
+
+**What counts as validated**, so this does not become an indefinite hold:
+
+1. `validation/live_root_recovery_test.py` — poisons the live root singleton (points it at a
+   closed port) and asserts the next client build drops it and redials against a real
+   atServer. This is deterministic: run it, do not wait for an outage.
+2. A real recurrence in the field showing `dropping the shared root connection and
+   redialling` followed by `rebuilt after redialling root`, with the service continuing.
+   Absence of the failure is *not* evidence — it is rare and environmental.
+
+(1) is enough to open **A** and **B**. **C** should go up as an issue regardless, since the
+fix is theirs to choose.
+
 ## Issue write-ups filed (no PR yet — need maintainer/design input)
 
 - **`AtClient` is not thread-safe, and does not say so** — one client owns one TLS socket
