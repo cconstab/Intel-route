@@ -28,6 +28,19 @@ import atsign.atsign_io as io  # noqa: E402
 SINGLETON = "_AtRootConnection__instance"
 
 
+class _SocketRaising:
+    """A socket whose reads fail the way a dropped TLS peer does."""
+
+    def __init__(self, error):
+        self.error = error
+
+    def read(self, *_args):
+        raise self.error
+
+    def close(self):
+        pass
+
+
 class DeadRoot:
     """A root connection pinned to an address that no longer answers."""
 
@@ -96,6 +109,26 @@ def main():
     broken = AtClient.__new__(AtClient)  # exactly what a failed __init__ leaves behind
     broken.__del__()  # must not raise
     print("failed build     -> collector stays quiet, no misleading traceback")
+
+    # 6. A root connection whose greeting read fails must not claim to be connected.
+    #    connect() sets _connected = True BEFORE reading the greeting, and find_secondary
+    #    only redials `if not self.is_connected()`. So without the abandoned-read guard a
+    #    failed greeting leaves a dead socket marked live, and every later lookup writes
+    #    into it. The guard covers this because it wraps AtConnection.read itself; PR #545
+    #    wraps only execute_command's read, so it would not.
+    root = AtRootConnection.__new__(AtRootConnection)
+    root._connected = True
+    root._verbose = False
+    root._secure_root_socket = _SocketRaising(ConnectionResetError("EOF in violation of protocol"))
+    try:
+        root.read()
+        raise AssertionError("expected the greeting read to raise")
+    except ConnectionResetError:
+        pass
+    assert root.is_connected() is False, (
+        "a root connection with a failed greeting still claims to be connected, "
+        "so find_secondary would never redial it")
+    print("failed greeting  -> root marked disconnected, so the next lookup redials")
 
     print("\nPASS: a bad root connection is dropped, so a process recovers on its own.")
 

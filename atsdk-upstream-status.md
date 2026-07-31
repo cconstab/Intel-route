@@ -73,6 +73,16 @@ package). Actions taken in this repo:
   [#545](https://github.com/atsign-foundation/at_python/pull/545): `execute_command`
   discards a connection whose reply was never read. Not in a release yet (v0.2.71 predates
   it), so the local guard below stays for now.
+
+  **Still valid, and our local version covers one case #545 does not.** #545 wraps the read
+  inside `execute_command`; the local guard wraps `AtConnection.read` itself, so it also
+  covers the **greeting read inside `connect()`** — and `connect()` sets `_connected = True`
+  *before* reading the greeting. Without a disconnect there, a failed greeting leaves a dead
+  socket marked live, and `find_secondary` (`if not self.is_connected(): connect()`) never
+  redials it: one of the ways the shared root connection wedges. Keeping the local guard
+  after #545 ships is therefore worth more than tidiness. A follow-up upstream would be to
+  set `_connected` only after the greeting is read, or disconnect if it fails.
+  Pinned by `validation/test_root_connection_recovery.py` (case 6).
   App side, two layers:
   1. **the guard**: `atsign_io` applies #545's behaviour locally at import — a connection
      whose read fails is discarded, so a queued reply can never be served to a later
